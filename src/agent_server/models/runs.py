@@ -1,0 +1,42 @@
+"""Run-related Pydantic models for Agent Protocol"""
+from typing import Optional, Dict, Any, List
+from datetime import datetime
+from pydantic import BaseModel, Field
+
+
+class RunCreate(BaseModel):
+    """Request model for creating runs"""
+    assistant_id: str = Field(..., description="Assistant to execute")
+    input: Dict[str, Any] = Field(..., description="Input data for the run")
+    config: Optional[Dict[str, Any]] = Field(None, description="LangGraph execution config")
+    stream: bool = Field(False, description="Enable streaming response")
+
+
+class Run(BaseModel):
+    """Run entity model"""
+    run_id: str
+    thread_id: str
+    assistant_id: str
+    status: str = "pending"  # pending, running, completed, failed, cancelled
+    input: Dict[str, Any]
+    output: Optional[Dict[str, Any]] = None
+    error_message: Optional[str] = None
+    user_id: str
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
+class RunList(BaseModel):
+    """Response model for listing runs"""
+    runs: List[Run]
+    total: int
+
+
+class RunStatus(BaseModel):
+    """Simple run status response"""
+    run_id: str
+    status: str
+    message: Optional[str] = None

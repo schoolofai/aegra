@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for LangGraph and metadata
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: langgraph_agent_server
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d langgraph_agent_server"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # LangGraph Agent Server
+  agent-server:
+    build:
+      context: .
+      dockerfile: deployments/docker/Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/langgraph_agent_server
+      - AUTH_TYPE=noop
+      - DEBUG=true
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./graphs:/app/graphs:ro
+      - ./.env:/app/.env:ro
+    command: uvicorn src.agent_server.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Redis (optional - for advanced queuing in future phases)
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    profiles:
+      - redis
+
+volumes:
+  postgres_data:
+  redis_data:
