@@ -22,12 +22,12 @@ async def create_assistant(
 ):
     """Create a new assistant"""
     
-    # Get LangGraph service
+    # Get LangGraph service to validate graph
     langgraph_service = get_langgraph_service()
-    
-    # Validate graph exists in langgraph.json
     available_graphs = langgraph_service.list_graphs()
-    graph_id = request.graph_id or request.assistant_id
+    
+    # Use graph_id as the main identifier
+    graph_id = request.graph_id
     
     if graph_id not in available_graphs:
         raise HTTPException(
@@ -41,14 +41,31 @@ async def create_assistant(
     except Exception as e:
         raise HTTPException(400, f"Failed to load graph: {str(e)}")
     
+    # Generate assistant_id if not provided
+    assistant_id = request.assistant_id or f"{graph_id}-{str(uuid4())[:8]}"
+    
+    # Generate name if not provided
+    name = request.name or f"Assistant for {graph_id}"
+    
     # Check if assistant already exists
-    if request.assistant_id in _assistants_db:
-        raise HTTPException(409, f"Assistant '{request.assistant_id}' already exists")
+    if assistant_id in _assistants_db:
+        if request.if_exists == "do_nothing":
+            return _assistants_db[assistant_id]
+        elif request.if_exists == "replace":
+            # Update existing assistant
+            existing = _assistants_db[assistant_id]
+            existing.name = name
+            existing.description = request.description
+            existing.config = request.config or {}
+            existing.graph_id = graph_id
+            return existing
+        else:  # error (default)
+            raise HTTPException(409, f"Assistant '{assistant_id}' already exists")
     
     # Create assistant record
     assistant = Assistant(
-        assistant_id=request.assistant_id,
-        name=request.name,
+        assistant_id=assistant_id,
+        name=name,
         description=request.description,
         config=request.config or {},
         graph_id=graph_id,
@@ -56,7 +73,7 @@ async def create_assistant(
         created_at=datetime.utcnow()
     )
     
-    _assistants_db[request.assistant_id] = assistant
+    _assistants_db[assistant_id] = assistant
     
     return assistant
 

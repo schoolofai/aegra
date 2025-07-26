@@ -6,11 +6,12 @@ from pydantic import BaseModel, Field
 
 class AssistantCreate(BaseModel):
     """Request model for creating assistants"""
-    assistant_id: str = Field(..., description="Unique assistant identifier")
-    name: str = Field(..., description="Human-readable assistant name")
+    assistant_id: Optional[str] = Field(None, description="Unique assistant identifier (auto-generated if not provided)")
+    name: Optional[str] = Field(None, description="Human-readable assistant name (auto-generated if not provided)")
     description: Optional[str] = Field(None, description="Assistant description")
     config: Optional[Dict[str, Any]] = Field(None, description="Assistant configuration")
-    graph_id: Optional[str] = Field(None, description="LangGraph graph ID from langgraph.json")
+    graph_id: str = Field(..., description="LangGraph graph ID from langgraph.json")
+    if_exists: Optional[str] = Field("error", description="What to do if assistant exists: error, do_nothing, or replace")
 
 
 class Assistant(BaseModel):

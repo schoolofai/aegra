@@ -1,13 +1,89 @@
-"""Server-Sent Events utilities and formatting"""
+"""Server-Sent Events utilities and formatting - LangGraph Compatible"""
 import json
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass
 
 
+def get_sse_headers() -> Dict[str, str]:
+    """Get standard SSE headers"""
+    return {
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+        "Content-Type": "text/event-stream",
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Headers": "Last-Event-ID",
+    }
+
+
+def format_sse_message(event: str, data: Any, event_id: Optional[str] = None) -> str:
+    """Format a message as Server-Sent Event following SSE standard"""
+    lines = []
+    
+    if event_id:
+        lines.append(f"id: {event_id}")
+    
+    lines.append(f"event: {event}")
+    
+    # Convert data to JSON string
+    if data is None:
+        data_str = ""
+    else:
+        data_str = json.dumps(data, default=str, separators=(',', ':'))
+    
+    lines.append(f"data: {data_str}")
+    lines.append("")  # Empty line to end the event
+    
+    return "\n".join(lines) + "\n"
+
+
+def create_metadata_event(run_id: str, event_id: Optional[str] = None) -> str:
+    """Create metadata event - equivalent to LangGraph's metadata event"""
+    data = {
+        "run_id": run_id,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    return format_sse_message("metadata", data, event_id)
+
+
+def create_values_event(chunk_data: Dict[str, Any], event_id: Optional[str] = None) -> str:
+    """Create values event - equivalent to LangGraph's values stream mode"""
+    return format_sse_message("values", chunk_data, event_id)
+
+
+def create_debug_event(debug_data: Dict[str, Any], event_id: Optional[str] = None) -> str:
+    """Create debug event - equivalent to LangGraph's debug stream mode"""
+    return format_sse_message("debug", debug_data, event_id)
+
+
+def create_end_event(event_id: Optional[str] = None) -> str:
+    """Create end event - signals completion of stream"""
+    return format_sse_message("end", None, event_id)
+
+
+def create_error_event(error: str, event_id: Optional[str] = None) -> str:
+    """Create error event"""
+    data = {
+        "error": error,
+        "timestamp": datetime.utcnow().isoformat()
+    }
+    return format_sse_message("error", data, event_id)
+
+
+def create_events_event(event_data: Dict[str, Any], event_id: Optional[str] = None) -> str:
+    """Create events stream mode event"""
+    return format_sse_message("events", event_data, event_id)
+
+
+def create_messages_event(messages_data: Any, event_type: str = "messages", event_id: Optional[str] = None) -> str:
+    """Create messages event (messages, messages/partial, messages/complete, messages/metadata)"""
+    return format_sse_message(event_type, messages_data, event_id)
+
+
+# Legacy compatibility functions (deprecated)
 @dataclass
 class SSEEvent:
-    """Server-Sent Event data structure"""
+    """Legacy SSE Event data structure - deprecated"""
     id: str
     event: str
     data: Dict[str, Any]
@@ -18,19 +94,20 @@ class SSEEvent:
             self.timestamp = datetime.utcnow()
     
     def format(self) -> str:
-        """Format as proper SSE event"""
+        """Format as proper SSE event - deprecated"""
         json_data = json.dumps(self.data, default=str)
         return f"id: {self.id}\nevent: {self.event}\ndata: {json_data}\n\n"
 
 
 def format_sse_event(id: str, event: str, data: Dict[str, Any]) -> str:
-    """Format data as Server-Sent Event"""
+    """Legacy format function - deprecated"""
     json_data = json.dumps(data, default=str)
     return f"id: {id}\nevent: {event}\ndata: {json_data}\n\n"
 
 
+# Legacy event creation functions - deprecated but kept for compatibility
 def create_start_event(run_id: str, event_counter: int) -> str:
-    """Create streaming start event"""
+    """Legacy start event - deprecated, use create_metadata_event instead"""
     return format_sse_event(
         id=f"{run_id}_event_{event_counter}",
         event="start",
@@ -44,27 +121,25 @@ def create_start_event(run_id: str, event_counter: int) -> str:
 
 
 def create_chunk_event(run_id: str, event_counter: int, chunk_data: Dict[str, Any]) -> str:
-    """Create streaming chunk event"""
+    """Legacy chunk event - deprecated, use create_values_event instead"""
     return format_sse_event(
         id=f"{run_id}_event_{event_counter}",
         event="chunk",
         data={
             "type": "execution_chunk",
-            "run_id": run_id,
             "chunk": chunk_data,
             "timestamp": datetime.utcnow().isoformat()
         }
     )
 
 
-def create_complete_event(run_id: str, event_counter: int, final_output: Any = None) -> str:
-    """Create streaming completion event"""
+def create_complete_event(run_id: str, event_counter: int, final_output: Any) -> str:
+    """Legacy complete event - deprecated, use create_end_event instead"""
     return format_sse_event(
         id=f"{run_id}_event_{event_counter}",
         event="complete",
         data={
             "type": "run_complete",
-            "run_id": run_id,
             "status": "completed",
             "final_output": final_output,
             "timestamp": datetime.utcnow().isoformat()
@@ -72,29 +147,13 @@ def create_complete_event(run_id: str, event_counter: int, final_output: Any = N
     )
 
 
-def create_error_event(run_id: str, event_counter: int, error: str, error_type: str = "execution_error") -> str:
-    """Create streaming error event"""
-    return format_sse_event(
-        id=f"{run_id}_event_{event_counter}",
-        event="error",
-        data={
-            "type": error_type,
-            "run_id": run_id,
-            "status": "failed",
-            "error": error,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-    )
-
-
 def create_cancelled_event(run_id: str, event_counter: int) -> str:
-    """Create streaming cancellation event"""
+    """Legacy cancelled event - deprecated"""
     return format_sse_event(
         id=f"{run_id}_event_{event_counter}",
         event="cancelled",
         data={
             "type": "run_cancelled",
-            "run_id": run_id,
             "status": "cancelled",
             "timestamp": datetime.utcnow().isoformat()
         }
@@ -102,24 +161,13 @@ def create_cancelled_event(run_id: str, event_counter: int) -> str:
 
 
 def create_interrupted_event(run_id: str, event_counter: int) -> str:
-    """Create streaming interruption event"""
+    """Legacy interrupted event - deprecated"""
     return format_sse_event(
         id=f"{run_id}_event_{event_counter}",
         event="interrupted",
         data={
             "type": "run_interrupted",
-            "run_id": run_id,
             "status": "interrupted",
             "timestamp": datetime.utcnow().isoformat()
         }
     )
-
-
-def get_sse_headers() -> Dict[str, str]:
-    """Get standard SSE response headers"""
-    return {
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no",  # Disable nginx buffering
-        "Content-Type": "text/event-stream"
-    }
