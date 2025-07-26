@@ -32,13 +32,11 @@ class DatabaseManager:
         # LangGraph packages require psycopg format, not asyncpg
         dsn = self._database_url.replace("postgresql+asyncpg://", "postgresql://")
         
-        # Initialize official LangGraph checkpointer
-        self.checkpointer = AsyncPostgresSaver.from_conn_string(dsn)
-        # Note: LangGraph components auto-create tables on first use
-        
-        # Initialize official LangGraph store
-        self.store = AsyncPostgresStore.from_conn_string(dsn)
-        # Note: LangGraph components auto-create tables on first use
+        # Store connection string for creating LangGraph components on demand
+        self._langgraph_dsn = dsn
+        self.checkpointer = None
+        self.store = None
+        # Note: LangGraph components will be created as context managers when needed
         
         # Create our minimal metadata tables
         await self._create_metadata_tables()
@@ -99,21 +97,21 @@ class DatabaseManager:
         if self.engine:
             await self.engine.dispose()
         
-        # LangGraph components handle their own connection cleanup
+        # LangGraph components are now created on demand as context managers
         
         print("✅ Database connections closed")
     
-    def get_checkpointer(self) -> AsyncPostgresSaver:
-        """Get the LangGraph checkpointer instance"""
-        if not self.checkpointer:
+    def get_checkpointer(self):
+        """Get a LangGraph checkpointer context manager"""
+        if not hasattr(self, '_langgraph_dsn'):
             raise RuntimeError("Database not initialized")
-        return self.checkpointer
+        return AsyncPostgresSaver.from_conn_string(self._langgraph_dsn)
     
-    def get_store(self) -> AsyncPostgresStore:
-        """Get the LangGraph store instance"""
-        if not self.store:
+    def get_store(self):
+        """Get a LangGraph store context manager"""
+        if not hasattr(self, '_langgraph_dsn'):
             raise RuntimeError("Database not initialized") 
-        return self.store
+        return AsyncPostgresStore.from_conn_string(self._langgraph_dsn)
     
     def get_engine(self) -> AsyncEngine:
         """Get the SQLAlchemy engine for metadata tables"""

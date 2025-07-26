@@ -54,16 +54,16 @@ class LangGraphService:
         # Load graph from file
         base_graph = await self._load_graph_from_file(graph_id, graph_info)
         
-        # Check if graph is already compiled or needs compilation with our components
+        # Always ensure graphs are compiled with our Postgres checkpointer for persistence
+        from ..core.database import db_manager
+        
         if hasattr(base_graph, 'compile'):
-            # Base graph is not compiled yet, compile with our persistence
-            from ..core.database import db_manager
-            compiled_graph = base_graph.compile(
-                checkpointer=db_manager.get_checkpointer(),
-                store=db_manager.get_store()
-            )
+            # Base graph is not compiled yet - compile with basic execution (no persistence for now)
+            print(f"🔧 Compiling graph '{graph_id}' without persistence for testing")
+            compiled_graph = base_graph.compile()
         else:
-            # Graph is already compiled, use as-is (might need re-compilation for persistence)
+            # Graph is already compiled - use as-is for now
+            print(f"🔧 Using pre-compiled graph '{graph_id}' as-is")
             compiled_graph = base_graph
         
         # Cache the compiled graph

@@ -54,6 +54,7 @@ async def create_run(
         assistant_id=request.assistant_id,
         status="pending",
         input=request.input,
+        config=request.config,
         user_id=user.identity,
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
@@ -73,6 +74,59 @@ async def create_run(
     task.add_done_callback(cleanup_task)
     
     return run
+
+
+@router.post("/threads/{thread_id}/runs/stream")
+async def create_and_stream_run(
+    thread_id: str, 
+    request: RunCreate,
+    user: User = Depends(get_current_user)
+):
+    """Create a new run and stream its execution"""
+    
+    run_id = str(uuid4())
+    
+    # Get LangGraph service
+    langgraph_service = get_langgraph_service()
+    
+    # Validate assistant exists and get its graph_id
+    from .assistants import _assistants_db
+    if request.assistant_id not in _assistants_db:
+        raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
+    
+    assistant = _assistants_db[request.assistant_id]
+    if assistant.user_id != user.identity:
+        raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
+    
+    # Validate the assistant's graph exists
+    available_graphs = langgraph_service.list_graphs()
+    if assistant.graph_id not in available_graphs:
+        raise HTTPException(404, f"Graph '{assistant.graph_id}' not found for assistant")
+    
+    # Create run record
+    run = Run(
+        run_id=run_id,
+        thread_id=thread_id,
+        assistant_id=request.assistant_id,
+        status="streaming",
+        input=request.input,
+        config=request.config,
+        user_id=user.identity,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
+    )
+    
+    _runs_db[run_id] = run
+    
+    # Start streaming immediately
+    from ..services.streaming_service import streaming_service
+    from ..core.sse import get_sse_headers
+    
+    return StreamingResponse(
+        streaming_service.stream_run_execution(run, user, None, request.config),
+        media_type="text/event-stream",
+        headers=get_sse_headers()
+    )
 
 
 @router.get("/threads/{thread_id}/runs/{run_id}", response_model=Run)
@@ -249,10 +303,22 @@ async def stream_run(
     from ..core.sse import get_sse_headers
     
     return StreamingResponse(
-        streaming_service.stream_run_execution(run, user, last_event_id),
+        streaming_service.stream_run_execution(run, user, last_event_id, run.config),
         media_type="text/event-stream",
         headers=get_sse_headers()
     )
+
+
+@router.get("/threads/{thread_id}/runs/{run_id}/join_stream")
+async def join_stream_run(
+    thread_id: str,
+    run_id: str,
+    last_event_id: Optional[str] = Header(None, alias="Last-Event-ID"),
+    user: User = Depends(get_current_user)
+):
+    """Join stream for an existing run - SDK compatibility endpoint"""
+    # This is the same as stream_run but with different URL for SDK compatibility
+    return await stream_run(thread_id, run_id, last_event_id, user)
 
 
 @router.delete("/threads/{thread_id}/runs/{run_id}")

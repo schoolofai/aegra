@@ -23,7 +23,8 @@ class StreamingService:
         self, 
         run: Run, 
         user: User, 
-        from_event_id: Optional[str] = None
+        from_event_id: Optional[str] = None,
+        config: Optional[Dict[str, Any]] = None
     ) -> AsyncIterator[str]:
         """Stream run execution with proper event handling"""
         
@@ -44,7 +45,7 @@ class StreamingService:
                 self.event_counters[run_id] = 0
             
             # Start fresh execution streaming
-            async for event in self._stream_fresh_execution(run, user):
+            async for event in self._stream_fresh_execution(run, user, config):
                 yield event
                 
         except asyncio.CancelledError:
@@ -67,7 +68,7 @@ class StreamingService:
         for event in missed_events:
             yield event.format()
     
-    async def _stream_fresh_execution(self, run: Run, user: User) -> AsyncIterator[str]:
+    async def _stream_fresh_execution(self, run: Run, user: User, config: Optional[Dict[str, Any]] = None) -> AsyncIterator[str]:
         """Stream fresh execution from the beginning"""
         
         run_id = run.run_id
@@ -91,15 +92,25 @@ class StreamingService:
         try:
             # Get LangGraph service and load graph
             langgraph_service = get_langgraph_service()
-            graph = await langgraph_service.get_graph(run.assistant_id)
+            
+            # Get assistant to find the correct graph_id
+            from ..api.assistants import _assistants_db
+            assistant = _assistants_db[run.assistant_id]
+            
+            # Load graph using the assistant's graph_id
+            graph = await langgraph_service.get_graph(assistant.graph_id)
             
             # Create run configuration with user context
-            config = create_run_config(run_id, run.thread_id, user, run.config or {})
+            run_config = create_run_config(run_id, run.thread_id, user, config or {})
             
-            # Stream graph execution
-            async for chunk in graph.astream(run.input, config=config):
+            # Stream graph execution and collect final output
+            final_output = None
+            async for chunk in graph.astream(run.input, config=run_config):
                 self.event_counters[run_id] += 1
                 event_counter = self.event_counters[run_id]
+                
+                # Keep track of the last chunk as final output
+                final_output = chunk
                 
                 chunk_event = create_chunk_event(run_id, event_counter, chunk)
                 await store_sse_event(
@@ -109,10 +120,6 @@ class StreamingService:
                     {"type": "execution_chunk", "chunk": chunk}
                 )
                 yield chunk_event
-            
-            # Get final state and send completion event
-            final_state = graph.get_state(config)
-            final_output = final_state.values if final_state else None
             
             self.event_counters[run_id] += 1
             event_counter = self.event_counters[run_id]

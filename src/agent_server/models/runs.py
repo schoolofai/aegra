@@ -21,6 +21,7 @@ class Run(BaseModel):
     input: Dict[str, Any]
     output: Optional[Dict[str, Any]] = None
     error_message: Optional[str] = None
+    config: Optional[Dict[str, Any]] = None
     user_id: str
     created_at: datetime
     updated_at: datetime
