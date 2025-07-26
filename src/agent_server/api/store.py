@@ -75,7 +75,7 @@ async def delete_store_item(
     return {"status": "deleted"}
 
 
-@router.post("/store/search", response_model=StoreSearchResponse)
+@router.post("/store/items/search", response_model=StoreSearchResponse)
 async def search_store_items(request: StoreSearchRequest, user: User = Depends(get_current_user)):
     """Search items in the LangGraph store"""
     

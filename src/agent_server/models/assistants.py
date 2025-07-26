@@ -33,6 +33,23 @@ class AssistantList(BaseModel):
     total: int
 
 
+class AssistantSearchRequest(BaseModel):
+    """Request model for assistant search"""
+    name: Optional[str] = Field(None, description="Filter by assistant name")
+    description: Optional[str] = Field(None, description="Filter by assistant description")
+    graph_id: Optional[str] = Field(None, description="Filter by graph ID")
+    limit: Optional[int] = Field(20, le=100, ge=1, description="Maximum results")
+    offset: Optional[int] = Field(0, ge=0, description="Results offset")
+
+
+class AssistantSearchResponse(BaseModel):
+    """Response model for assistant search"""
+    assistants: list[Assistant]
+    total: int
+    limit: int
+    offset: int
+
+
 class AgentSchemas(BaseModel):
     """Agent schema definitions for client integration"""
     input_schema: Dict[str, Any] = Field(..., description="JSON Schema for agent inputs")

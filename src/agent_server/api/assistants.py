@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends
 
-from ..models import Assistant, AssistantCreate, AssistantList, AgentSchemas, User
+from ..models import Assistant, AssistantCreate, AssistantList, AssistantSearchRequest, AssistantSearchResponse, AgentSchemas, User
 from ..services.langgraph_service import get_langgraph_service
 from ..core.auth_deps import get_current_user
 
@@ -69,6 +69,51 @@ async def list_assistants(user: User = Depends(get_current_user)):
     return AssistantList(
         assistants=user_assistants,
         total=len(user_assistants)
+    )
+
+
+@router.post("/assistants/search", response_model=AssistantSearchResponse)
+async def search_assistants(
+    request: AssistantSearchRequest,
+    user: User = Depends(get_current_user)
+):
+    """Search assistants with filters"""
+    # Start with user's assistants
+    user_assistants = [a for a in _assistants_db.values() if a.user_id == user.identity]
+    
+    # Apply filters
+    filtered_assistants = user_assistants
+    
+    if request.name:
+        filtered_assistants = [
+            a for a in filtered_assistants 
+            if request.name.lower() in a.name.lower()
+        ]
+    
+    if request.description:
+        filtered_assistants = [
+            a for a in filtered_assistants 
+            if a.description and request.description.lower() in a.description.lower()
+        ]
+    
+    if request.graph_id:
+        filtered_assistants = [
+            a for a in filtered_assistants 
+            if a.graph_id == request.graph_id
+        ]
+    
+    # Apply pagination
+    total = len(filtered_assistants)
+    offset = request.offset or 0
+    limit = request.limit or 20
+    
+    paginated_assistants = filtered_assistants[offset:offset + limit]
+    
+    return AssistantSearchResponse(
+        assistants=paginated_assistants,
+        total=total,
+        limit=limit,
+        offset=offset
     )
 
 

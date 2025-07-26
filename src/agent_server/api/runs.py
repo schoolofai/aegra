@@ -66,38 +66,39 @@ async def create_run(
     return run
 
 
-@router.get("/runs/{run_id}", response_model=Run)
-async def get_run(run_id: str, user: User = Depends(get_current_user)):
+@router.get("/threads/{thread_id}/runs/{run_id}", response_model=Run)
+async def get_run(thread_id: str, run_id: str, user: User = Depends(get_current_user)):
     """Get run by ID"""
     if run_id not in _runs_db:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     run = _runs_db[run_id]
-    if run.user_id != user.identity:
+    if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     return run
 
 
-@router.get("/runs", response_model=RunList)
-async def list_runs(user: User = Depends(get_current_user)):
-    """List user's runs"""
-    user_runs = [r for r in _runs_db.values() if r.user_id == user.identity]
+@router.get("/threads/{thread_id}/runs", response_model=RunList)
+async def list_runs(thread_id: str, user: User = Depends(get_current_user)):
+    """List runs for a specific thread"""
+    user_runs = [r for r in _runs_db.values() 
+                 if r.user_id == user.identity and r.thread_id == thread_id]
     return RunList(
         runs=user_runs,
         total=len(user_runs)
     )
 
 
-@router.post("/runs/{run_id}/cancel", response_model=RunStatus)
-async def cancel_run(run_id: str, user: User = Depends(get_current_user)):
+@router.post("/threads/{thread_id}/runs/{run_id}/cancel", response_model=RunStatus)
+async def cancel_run(thread_id: str, run_id: str, user: User = Depends(get_current_user)):
     """Cancel a running or pending run"""
     
     if run_id not in _runs_db:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     run = _runs_db[run_id]
-    if run.user_id != user.identity:
+    if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     # Check if cancellable
@@ -114,15 +115,15 @@ async def cancel_run(run_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(500, "Failed to cancel run")
 
 
-@router.post("/runs/{run_id}/interrupt", response_model=RunStatus)
-async def interrupt_run(run_id: str, user: User = Depends(get_current_user)):
+@router.post("/threads/{thread_id}/runs/{run_id}/interrupt", response_model=RunStatus)
+async def interrupt_run(thread_id: str, run_id: str, user: User = Depends(get_current_user)):
     """Interrupt a running execution gracefully"""
     
     if run_id not in _runs_db:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     run = _runs_db[run_id]
-    if run.user_id != user.identity:
+    if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     # Check if interruptible
@@ -139,15 +140,15 @@ async def interrupt_run(run_id: str, user: User = Depends(get_current_user)):
         raise HTTPException(500, "Failed to interrupt run")
 
 
-@router.get("/runs/{run_id}/wait", response_model=Run)
-async def wait_for_run(run_id: str, user: User = Depends(get_current_user)):
+@router.get("/threads/{thread_id}/runs/{run_id}/wait", response_model=Run)
+async def wait_for_run(thread_id: str, run_id: str, user: User = Depends(get_current_user)):
     """Wait for a background run to complete and return final output"""
     
     if run_id not in _runs_db:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     run = _runs_db[run_id]
-    if run.user_id != user.identity:
+    if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     # If already finished, return immediately
@@ -168,8 +169,9 @@ async def wait_for_run(run_id: str, user: User = Depends(get_current_user)):
     return _runs_db[run_id]
 
 
-@router.get("/runs/{run_id}/stream")
+@router.get("/threads/{thread_id}/runs/{run_id}/stream")
 async def stream_run(
+    thread_id: str,
     run_id: str,
     last_event_id: Optional[str] = Header(None, alias="Last-Event-ID"),
     user: User = Depends(get_current_user)
@@ -180,7 +182,7 @@ async def stream_run(
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     run = _runs_db[run_id]
-    if run.user_id != user.identity:
+    if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
     # Check if run is streamable
@@ -215,6 +217,30 @@ async def stream_run(
         media_type="text/event-stream",
         headers=get_sse_headers()
     )
+
+
+@router.delete("/threads/{thread_id}/runs/{run_id}")
+async def delete_run(thread_id: str, run_id: str, user: User = Depends(get_current_user)):
+    """Delete a run"""
+    if run_id not in _runs_db:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    
+    run = _runs_db[run_id]
+    if run.user_id != user.identity or run.thread_id != thread_id:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    
+    # Cancel the run if it's still active
+    if run.status in ["pending", "running", "streaming"]:
+        from ..services.streaming_service import streaming_service
+        await streaming_service.cancel_run(run_id)
+    
+    # Remove from database
+    del _runs_db[run_id]
+    
+    # Clean up active task if exists
+    task = active_runs.pop(run_id, None)
+    if task and not task.done():
+        task.cancel()
 
 
 async def execute_run_async(

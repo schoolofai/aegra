@@ -27,6 +27,11 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize database and LangGraph components
     await db_manager.initialize()
     
+    # Initialize LangGraph service
+    from .services.langgraph_service import get_langgraph_service
+    langgraph_service = get_langgraph_service()
+    await langgraph_service.initialize()
+    
     # Initialize event store cleanup task
     from .services.event_store import event_store
     await event_store.start_cleanup_task()
