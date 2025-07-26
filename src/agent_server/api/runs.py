@@ -33,10 +33,19 @@ async def create_run(
     # Get LangGraph service
     langgraph_service = get_langgraph_service()
     
-    # Validate assistant exists
-    available_graphs = langgraph_service.list_graphs()
-    if request.assistant_id not in available_graphs:
+    # Validate assistant exists and get its graph_id
+    from .assistants import _assistants_db
+    if request.assistant_id not in _assistants_db:
         raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
+    
+    assistant = _assistants_db[request.assistant_id]
+    if assistant.user_id != user.identity:
+        raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
+    
+    # Validate the assistant's graph exists
+    available_graphs = langgraph_service.list_graphs()
+    if assistant.graph_id not in available_graphs:
+        raise HTTPException(404, f"Graph '{assistant.graph_id}' not found for assistant")
     
     # Create run record
     run = Run(
@@ -169,6 +178,33 @@ async def wait_for_run(thread_id: str, run_id: str, user: User = Depends(get_cur
     return _runs_db[run_id]
 
 
+@router.get("/threads/{thread_id}/runs/{run_id}/join")
+async def join_run(thread_id: str, run_id: str, user: User = Depends(get_current_user)):
+    """Join a run (wait for completion and return thread state) - SDK compatibility"""
+    
+    if run_id not in _runs_db:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    
+    run = _runs_db[run_id]
+    if run.user_id != user.identity or run.thread_id != thread_id:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+    
+    # Wait for completion if not finished
+    if run.status not in ["completed", "failed", "cancelled"]:
+        task = active_runs.get(run_id)
+        if task:
+            try:
+                await task  # Wait for completion
+            except asyncio.CancelledError:
+                pass  # Task was cancelled
+            except Exception:
+                pass  # Task failed, status already updated
+    
+    # Return the final thread state (which should include the run output)
+    final_run = _runs_db[run_id]
+    return final_run.output if final_run.output else {}
+
+
 @router.get("/threads/{thread_id}/runs/{run_id}/stream")
 async def stream_run(
     thread_id: str,
@@ -255,8 +291,12 @@ async def execute_run_async(
         # Update to running
         await update_run_status(run_id, "running")
         
-        # Load graph
-        graph = await langgraph_service.get_graph(request.assistant_id)
+        # Get assistant to find the correct graph_id
+        from .assistants import _assistants_db
+        assistant = _assistants_db[request.assistant_id]
+        
+        # Load graph using the assistant's graph_id
+        graph = await langgraph_service.get_graph(assistant.graph_id)
         
         # Prepare LangGraph config
         config = {

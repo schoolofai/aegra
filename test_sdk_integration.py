@@ -167,16 +167,22 @@ class APITester:
             )
             print(f"✅ Created run: {run['run_id']}")
             
-            # Wait for completion
+            # Wait for completion using join
             print("⏳ Waiting for run to complete...")
-            completed_run = await self.client.runs.wait(
+            result = await self.client.runs.join(
+                thread_id=thread['thread_id'],
+                run_id=run['run_id']
+            )
+            
+            # Get final run status
+            completed_run = await self.client.runs.get(
                 thread_id=thread['thread_id'],
                 run_id=run['run_id']
             )
             print(f"✅ Run completed with status: {completed_run['status']}")
             
-            if completed_run.get('output'):
-                print(f"📤 Run output: {completed_run['output']}")
+            if result:
+                print(f"📤 Run output: {result}")
             
             # List runs for the thread
             runs = await self.client.runs.list(thread_id=thread['thread_id'])
