@@ -36,6 +36,9 @@ uv run pytest tests/test_api/test_assistants.py
 # Run tests with async support
 uv run pytest -v --asyncio-mode=auto
 
+# Run with coverage
+uv run pytest --cov=src --cov-report=html
+
 # Health check endpoint test
 curl http://localhost:8000/health
 ```
@@ -45,6 +48,20 @@ curl http://localhost:8000/health
 # Database migrations (when implemented)
 alembic upgrade head
 alembic revision --autogenerate -m "description"
+
+# Reset database (development)
+docker-compose down postgres
+docker-compose up -d postgres
+```
+
+### Code Quality (Optional - not currently configured)
+```bash
+# If ruff is added to dependencies, use:
+# uv run ruff check .
+# uv run ruff format .
+
+# If mypy is added, use:
+# uv run mypy src --cache-dir .mypy_cache
 ```
 
 ## High-Level Architecture
@@ -114,14 +131,39 @@ graph = workflow.compile()  # Must export as 'graph'
 - **FastAPI + uvicorn**: HTTP API layer
 - **SQLAlchemy**: For Agent Protocol metadata tables only
 
+## Authentication System
+
+The server uses environment-based authentication switching with proper LangGraph SDK integration:
+
+**Authentication Types:**
+- `AUTH_TYPE=noop` - No authentication (allow all requests, useful for development)
+- `AUTH_TYPE=custom` - Custom authentication (integrate with your auth service)
+
+**Configuration:**
+```bash
+# Set in .env file
+AUTH_TYPE=noop  # or "custom"
+```
+
+**Custom Authentication:**
+To implement custom auth, modify the `@auth.authenticate` and `@auth.on` decorated functions in `auth.py`:
+1. Update the custom `authenticate()` function to integrate with your auth service (Firebase, JWT, etc.)
+2. The `authorize()` function handles user-scoped access control automatically  
+3. Add any additional environment variables needed for your auth service
+
+**Middleware Integration:**
+Authentication runs as middleware on every request. LangGraph operations automatically inherit the authenticated user context for proper data scoping.
+
 ## Development Patterns
 
 **Import patterns**: Always use relative imports within the package and absolute imports for external dependencies.
 
 **Database access**: Use `db_manager.get_checkpointer()` and `db_manager.get_store()` for LangGraph operations, `db_manager.get_engine()` for metadata queries.
 
+**Authentication**: Use `get_current_user(request)` dependency to access authenticated user in FastAPI routes. The user is automatically set by LangGraph auth middleware.
+
 **Error handling**: Use `Auth.exceptions.HTTPException` for authentication errors to maintain LangGraph SDK compatibility.
 
 **Testing**: Tests should be async-aware and use pytest-asyncio for proper async test support.
 
-Always run lint and typecheck commands (`npm run lint`, `npm run typecheck`, `ruff`, etc.) before completing tasks if they are available in the project.
+Always run test commands (`uv run pytest`) before completing tasks. Linting and type checking tools are not currently configured for this project.

@@ -6,6 +6,7 @@ from typing import Dict
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.middleware.authentication import AuthenticationMiddleware
 
 from .core.database import db_manager
 from .core.health import router as health_router
@@ -14,6 +15,7 @@ from .api.threads import router as threads_router
 from .api.runs import router as runs_router
 from .api.store import router as store_router
 from .models.errors import AgentProtocolError, get_error_type
+from .core.auth_middleware import get_auth_backend, on_auth_error
 
 # Task management for run cancellation
 active_runs: Dict[str, asyncio.Task] = {}
@@ -59,6 +61,13 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+)
+
+# Add authentication middleware (must be added after CORS)
+app.add_middleware(
+    AuthenticationMiddleware,
+    backend=get_auth_backend(),
+    on_error=on_auth_error
 )
 
 # Include routers
