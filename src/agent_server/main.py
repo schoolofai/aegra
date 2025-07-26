@@ -1,7 +1,12 @@
 """FastAPI application for LangGraph Agent Protocol Server"""
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import Dict
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware

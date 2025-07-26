@@ -1,10 +1,9 @@
 {
   "$schema": "https://raw.githubusercontent.com/langchain-ai/langgraph/refs/heads/main/libs/cli/schemas/schema.json",
-  "dependencies": [
-    "."
-  ],
+  "dependencies": ["."],
   "graphs": {
-    "weather_agent": "./graphs/weather_agent.py:graph"
+    "weather_agent": "./graphs/weather_agent.py:graph",
+    "chat_agent": "./graphs/chat_agent.py:chat_graph"
   },
   "env": ".env",
   "auth": {
