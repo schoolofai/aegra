@@ -5,6 +5,29 @@ from typing import Dict, Any, Optional, Tuple, Union
 from dataclasses import dataclass
 
 
+def _serialize_message_object(obj):
+    """Custom serializer for LangChain message objects"""
+    # Handle LangChain message objects
+    if hasattr(obj, 'dict'):
+        return obj.dict()
+    elif hasattr(obj, '__dict__'):
+        # For message chunks, extract key attributes
+        result = {}
+        if hasattr(obj, 'content'):
+            result['content'] = obj.content
+        if hasattr(obj, 'additional_kwargs'):
+            result['additional_kwargs'] = obj.additional_kwargs
+        if hasattr(obj, 'response_metadata'):
+            result['response_metadata'] = obj.response_metadata
+        if hasattr(obj, 'id'):
+            result['id'] = obj.id
+        if hasattr(obj, 'type'):
+            result['type'] = obj.type
+        return result if result else str(obj)
+    else:
+        return str(obj)
+
+
 def get_sse_headers() -> Dict[str, str]:
     """Get standard SSE headers"""
     return {
@@ -25,11 +48,11 @@ def format_sse_message(event: str, data: Any, event_id: Optional[str] = None) ->
     
     lines.append(f"event: {event}")
     
-    # Convert data to JSON string
+    # Convert data to JSON string with proper message object handling
     if data is None:
         data_str = ""
     else:
-        data_str = json.dumps(data, default=str, separators=(',', ':'))
+        data_str = json.dumps(data, default=_serialize_message_object, separators=(',', ':'))
     
     lines.append(f"data: {data_str}")
     lines.append("")  # Empty line to end the event
@@ -75,9 +98,37 @@ def create_events_event(event_data: Dict[str, Any], event_id: Optional[str] = No
     return format_sse_message("events", event_data, event_id)
 
 
+def create_state_event(state_data: Dict[str, Any], event_id: Optional[str] = None) -> str:
+    """Create state event - equivalent to LangGraph's state stream mode"""
+    return format_sse_message("state", state_data, event_id)
+
+
+def create_logs_event(logs_data: Dict[str, Any], event_id: Optional[str] = None) -> str:
+    """Create logs event - equivalent to LangGraph's logs stream mode"""
+    return format_sse_message("logs", logs_data, event_id)
+
+
+def create_tasks_event(tasks_data: Dict[str, Any], event_id: Optional[str] = None) -> str:
+    """Create tasks event - equivalent to LangGraph's tasks stream mode"""
+    return format_sse_message("tasks", tasks_data, event_id)
+
+
+def create_subgraphs_event(subgraphs_data: Dict[str, Any], event_id: Optional[str] = None) -> str:
+    """Create subgraphs event - equivalent to LangGraph's subgraphs stream mode"""
+    return format_sse_message("subgraphs", subgraphs_data, event_id)
+
+
 def create_messages_event(messages_data: Any, event_type: str = "messages", event_id: Optional[str] = None) -> str:
     """Create messages event (messages, messages/partial, messages/complete, messages/metadata)"""
-    return format_sse_message(event_type, messages_data, event_id)
+    # Handle tuple format for token streaming: (message_chunk, metadata)
+    if isinstance(messages_data, tuple) and len(messages_data) == 2:
+        message_chunk, metadata = messages_data
+        # Format as expected by LangGraph SDK client
+        data = [message_chunk, metadata]
+        return format_sse_message(event_type, data, event_id)
+    else:
+        # Handle list of messages format
+        return format_sse_message(event_type, messages_data, event_id)
 
 
 # Legacy compatibility functions (deprecated)

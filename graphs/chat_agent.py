@@ -18,7 +18,7 @@ class ChatState(TypedDict):
     messages: List[BaseMessage]
 
 
-def call_llm(state: ChatState) -> ChatState:
+async def call_llm(state: ChatState) -> ChatState:
     """Call the LLM with the current messages"""
     
     # Initialize OpenAI LLM
@@ -32,7 +32,7 @@ def call_llm(state: ChatState) -> ChatState:
     messages = state["messages"]
     
     # Call the LLM
-    response = llm.invoke(messages)
+    response = await llm.ainvoke(messages)
     
     # Add the response to messages
     updated_messages = messages + [response]
@@ -66,14 +66,16 @@ chat_graph = create_chat_graph()
 if __name__ == "__main__":
     # Test the graph locally
     import asyncio
-    
+    import dotenv
+    dotenv.load_dotenv()
     async def test_chat():
         initial_state = {
             "messages": [HumanMessage(content="Hello! How are you today?")]
         }
         
         print("🤖 Testing chat graph...")
-        result = await chat_graph.ainvoke(initial_state)
-        print(f"📝 Result: {result['messages'][-1].content}")
+        async for event in chat_graph.astream(initial_state, stream_mode=["messages", "values"]):
+            print(event)
+            print("\n\n")
     
     asyncio.run(test_chat()) 

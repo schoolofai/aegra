@@ -112,9 +112,9 @@ async def create_and_stream_run(
     
     _runs_db[run_id] = run
     
-    # Extract stream mode from request config or default to "values"
-    stream_mode = None
-    if request.config and "stream_mode" in request.config:
+    # Extract requested stream mode(s)
+    stream_mode = request.stream_mode
+    if not stream_mode and request.config and "stream_mode" in request.config:
         stream_mode = request.config["stream_mode"]
     
     # Start streaming immediately using EventSourceResponse

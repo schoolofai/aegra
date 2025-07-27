@@ -10,6 +10,7 @@ class RunCreate(BaseModel):
     input: Dict[str, Any] = Field(..., description="Input data for the run")
     config: Optional[Dict[str, Any]] = Field(None, description="LangGraph execution config")
     stream: bool = Field(False, description="Enable streaming response")
+    stream_mode: Optional[str | list[str]] = Field(None, description="Requested stream mode(s) as per LangGraph")
 
 
 class Run(BaseModel):

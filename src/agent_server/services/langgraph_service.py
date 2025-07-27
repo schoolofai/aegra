@@ -1,8 +1,11 @@
 """LangGraph integration service with official patterns"""
 import json
 import importlib.util
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, TypeVar
 from pathlib import Path
+from langgraph.graph import StateGraph
+
+State = TypeVar("State")
 
 
 class LangGraphService:
@@ -40,7 +43,7 @@ class LangGraphService:
                 "export_name": export_name
             }
     
-    async def get_graph(self, graph_id: str, force_reload: bool = False):
+    async def get_graph(self, graph_id: str, force_reload: bool = False) -> StateGraph[Any]:
         """Get a compiled graph by ID with caching and LangGraph integration"""
         if graph_id not in self._graph_registry:
             raise ValueError(f"Graph not found: {graph_id}")
