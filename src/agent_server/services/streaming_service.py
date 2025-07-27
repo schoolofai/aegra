@@ -1,5 +1,6 @@
 """Streaming service for orchestrating SSE streaming - LangGraph Compatible"""
 import asyncio
+import logging
 from typing import Dict, AsyncIterator, Optional, Any
 
 from ..models import Run, User
@@ -11,6 +12,9 @@ from ..core.sse import (
 )
 from .event_store import event_store, store_sse_event
 from .langgraph_service import get_langgraph_service, create_run_config
+from .broker import broker_manager
+
+logger = logging.getLogger(__name__)
 
 
 class StreamingService:
@@ -19,49 +23,25 @@ class StreamingService:
     def __init__(self):
         self.active_streams: Dict[str, asyncio.Task] = {}
         self.event_counters: Dict[str, int] = {}
-        # Broker system: one queue per run for live event distribution
-        self.brokers: Dict[str, asyncio.Queue] = {}
-        self.broker_finished: Dict[str, bool] = {}
     
-    async def get_or_create_broker(self, run_id: str) -> asyncio.Queue:
-        """Get or create a broker queue for a run"""
-        if run_id not in self.brokers:
-            self.brokers[run_id] = asyncio.Queue()
-            self.broker_finished[run_id] = False
-        return self.brokers[run_id]
-    
-    async def put_to_broker(self, run_id: str, event_id: str, raw_event: Any):
-        """Put an event into the run's broker queue for live consumers, carrying event_id to avoid duplicates"""
-        broker = await self.get_or_create_broker(run_id)
-        # Keep internal counter in sync with highest event index seen
+    def _next_event_counter(self, run_id: str, event_id: str) -> int:
+        """Update and return the next event counter for a run"""
         try:
             idx = self._extract_event_sequence(event_id)
             current = self.event_counters.get(run_id, 0)
             if idx > current:
                 self.event_counters[run_id] = idx
+                return idx
         except Exception:
             pass  # Ignore format issues
-        await broker.put((event_id, raw_event))
+        return self.event_counters.get(run_id, 0)
     
-    async def consume_broker(self, run_id: str) -> AsyncIterator[tuple[str, Any]]:
-        """Consume (event_id, raw_event) pairs from a run's broker queue"""
-        broker = await self.get_or_create_broker(run_id)
-
-        while True:
-            try:
-                # Use timeout to check if run is finished
-                event_id, raw_event = await asyncio.wait_for(broker.get(), timeout=0.1)
-                yield event_id, raw_event
-
-                # Check if this is an end event
-                if isinstance(raw_event, tuple) and len(raw_event) >= 1 and raw_event[0] == "end":
-                    break
-
-            except asyncio.TimeoutError:
-                # Check if run is finished and queue is empty
-                if self.broker_finished.get(run_id, False) and broker.empty():
-                    break
-                continue
+    async def put_to_broker(self, run_id: str, event_id: str, raw_event: Any):
+        """Put an event into the run's broker queue for live consumers"""
+        broker = broker_manager.get_or_create_broker(run_id)
+        # Keep internal counter in sync with highest event index seen
+        self._next_event_counter(run_id, event_id)
+        await broker.put(event_id, raw_event)
     
     async def store_event_from_raw(self, run_id: str, event_id: str, raw_event: Any):
         """Convert raw event to stored format and store it"""
@@ -110,28 +90,27 @@ class StreamingService:
     
     async def signal_run_cancelled(self, run_id: str):
         """Signal that a run was cancelled"""
-        # Generate a synthetic event_id greater than any existing
         counter = self.event_counters.get(run_id, 0) + 1
         self.event_counters[run_id] = counter
         event_id = f"{run_id}_event_{counter}"
-        if run_id in self.brokers:
-            await self.brokers[run_id].put((event_id, ("end", {"status": "cancelled"})))
-        self.broker_finished[run_id] = True
+        
+        broker = broker_manager.get_or_create_broker(run_id)
+        if broker:
+            await broker.put(event_id, ("end", {"status": "cancelled"}))
+        
+        broker_manager.cleanup_broker(run_id)
     
     async def signal_run_error(self, run_id: str, error_message: str):
         """Signal that a run encountered an error"""
         counter = self.event_counters.get(run_id, 0) + 1
         self.event_counters[run_id] = counter
         event_id = f"{run_id}_event_{counter}"
-        if run_id in self.brokers:
-            await self.brokers[run_id].put((event_id, ("end", {"status": "failed", "error": error_message})))
-        self.broker_finished[run_id] = True
-    
-    async def cleanup_broker(self, run_id: str):
-        """Clean up broker resources for a run"""
-        self.broker_finished[run_id] = True
-        # Don't immediately delete broker in case there are still consumers
-        # It will be cleaned up later or on service restart
+        
+        broker = broker_manager.get_or_create_broker(run_id)
+        if broker:
+            await broker.put(event_id, ("end", {"status": "failed", "error": error_message}))
+        
+        broker_manager.cleanup_broker(run_id)
     
     def _extract_event_sequence(self, event_id: str) -> int:
         """Extract numeric sequence from event_id format: {run_id}_event_{sequence}"""
@@ -169,27 +148,30 @@ class StreamingService:
                     last_sent_sequence = self._extract_event_sequence(ev.id)
 
             # If run already finished and there's nothing new to stream, exit
-            if run.status in ["completed", "failed", "cancelled", "interrupted"] and self.broker_finished.get(run_id, True):
+            broker = broker_manager.get_or_create_broker(run_id)
+            if run.status in ["completed", "failed", "cancelled", "interrupted"] and (broker.is_finished()):
                 return
             
             # Consume live events from broker if run is still active
-            async for event_id, raw_event in self.consume_broker(run_id):
-                # Skip duplicates that were already replayed - compare numeric sequences
-                current_sequence = self._extract_event_sequence(event_id)
-                if last_sent_event_id is not None and current_sequence <= last_sent_sequence:
-                    continue
+            if broker:
+                async for event_id, raw_event in broker.aiter():
+                    # Skip duplicates that were already replayed - compare numeric sequences
+                    current_sequence = self._extract_event_sequence(event_id)
+                    if last_sent_event_id is not None and current_sequence <= last_sent_sequence:
+                        continue
 
-                sse_event = await self._convert_raw_to_sse(event_id, raw_event)
-                if sse_event:
-                    yield sse_event
-                    last_sent_event_id = event_id
-                    last_sent_sequence = current_sequence
+                    sse_event = await self._convert_raw_to_sse(event_id, raw_event)
+                    if sse_event:
+                        yield sse_event
+                        last_sent_event_id = event_id
+                        last_sent_sequence = current_sequence
                 
         except asyncio.CancelledError:
             # Handle client disconnect gracefully
+            logger.debug(f"Stream cancelled for run {run_id}")
             pass
         except Exception as e:
-            print(f"❌ Error in stream_run_execution: {e}")
+            logger.error(f"Error in stream_run_execution for run {run_id}: {e}")
             yield create_error_event(str(e))
     
     async def _convert_raw_to_sse(self, event_id: str, raw_event: Any) -> Optional[str]:
@@ -228,37 +210,46 @@ class StreamingService:
         
         return None
     
-    
     async def interrupt_run(self, run_id: str) -> bool:
         """Interrupt a running execution"""
-        # Signal interruption through broker
-        await self.signal_run_error(run_id, "Run was interrupted")
-        await self._update_run_status(run_id, "interrupted")
-        return True
+        try:
+            await self.signal_run_error(run_id, "Run was interrupted")
+            await self._update_run_status(run_id, "interrupted")
+            return True
+        except Exception as e:
+            logger.error(f"Error interrupting run {run_id}: {e}")
+            return False
     
     async def cancel_run(self, run_id: str) -> bool:
         """Cancel a pending or running execution"""
-        # Signal cancellation through broker
-        await self.signal_run_cancelled(run_id)
-        await self._update_run_status(run_id, "cancelled")
-        return True
+        try:
+            await self.signal_run_cancelled(run_id)
+            await self._update_run_status(run_id, "cancelled")
+            return True
+        except Exception as e:
+            logger.error(f"Error cancelling run {run_id}: {e}")
+            return False
     
     async def _update_run_status(self, run_id: str, status: str, output: Any = None, error: str = None):
         """Update run status in database"""
-        # Import here to avoid circular imports
-        from ..api.runs import _runs_db, update_run_status
-        
-        if run_id in _runs_db:
-            await update_run_status(run_id, status, output, error)
+        try:
+            # Import here to avoid circular imports
+            from ..api.runs import _runs_db, update_run_status
+            
+            if run_id in _runs_db:
+                await update_run_status(run_id, status, output, error)
+        except Exception as e:
+            logger.error(f"Error updating run status for {run_id}: {e}")
     
     def is_run_streaming(self, run_id: str) -> bool:
         """Check if run is currently active (has a broker)"""
-        return run_id in self.brokers and not self.broker_finished.get(run_id, True)
+        broker = broker_manager.get_broker(run_id)
+        return broker is not None and not broker.is_finished()
     
     async def cleanup_run(self, run_id: str):
         """Clean up streaming resources for a run"""
         self.active_streams.pop(run_id, None)
-        await self.cleanup_broker(run_id)
+        broker_manager.cleanup_broker(run_id)
 
     def _stored_event_to_sse(self, run_id: str, ev) -> Optional[str]:
         """Convert stored event object to SSE string"""

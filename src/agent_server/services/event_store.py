@@ -63,6 +63,8 @@ class EventStore:
                     last_index = i
                     break
             
+            #TODO: Remove this after stable release.
+            # This is a hack to support mock event IDs for testing because we don't get event_id data on client sdk streamed chunks.
             # If exact match not found, try sequence-based lookup for mock IDs
             if last_index == -1:
                 try:

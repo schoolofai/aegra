@@ -362,7 +362,7 @@ async def execute_run_async(
         raise
     finally:
         # Clean up broker
-        await streaming_service.cleanup_broker(run_id)
+        await streaming_service.cleanup_run(run_id)
         active_runs.pop(run_id, None)
 
 
