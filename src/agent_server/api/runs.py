@@ -20,6 +20,9 @@ _runs_db = {}
 # Global task registry for run management
 active_runs: Dict[str, asyncio.Task] = {}
 
+# Default stream modes for background run execution
+RUN_STREAM_MODES = ["messages", "values", "custom"]
+
 
 @router.post("/threads/{thread_id}/runs", response_model=Run)
 async def create_run(
@@ -64,7 +67,7 @@ async def create_run(
     _runs_db[run_id] = run
     
     # Start execution asynchronously
-    task = asyncio.create_task(execute_run_async(run_id, thread_id, assistant.graph_id, request.input, user, request.config))
+    task = asyncio.create_task(execute_run_async(run_id, thread_id, assistant.graph_id, request.input, user, request.config, request.stream_mode))
     active_runs[run_id] = task
     
     return run
@@ -112,12 +115,16 @@ async def create_and_stream_run(
     
     _runs_db[run_id] = run
     
-    # Extract requested stream mode(s)
+    # Start background execution that will populate the broker
+    task = asyncio.create_task(execute_run_async(run_id, thread_id, assistant.graph_id, request.input, user, request.config, request.stream_mode))
+    active_runs[run_id] = task
+    
+    # Extract requested stream mode(s) - not used for broker consumption but kept for compatibility
     stream_mode = request.stream_mode
     if not stream_mode and request.config and "stream_mode" in request.config:
         stream_mode = request.config["stream_mode"]
     
-    # Start streaming immediately using EventSourceResponse
+    # Stream immediately from broker (which will also include replay of any early events)
     from ..services.streaming_service import streaming_service
     
     return StreamingResponse(
@@ -258,18 +265,6 @@ async def stream_run(
     )
 
 
-@router.get("/threads/{thread_id}/runs/{run_id}/join_stream")
-async def join_stream_run(
-    thread_id: str,
-    run_id: str,
-    last_event_id: Optional[str] = Header(None, alias="Last-Event-ID"),
-    stream_mode: Optional[str] = Query(None),
-    user: User = Depends(get_current_user)
-):
-    """Join stream for an existing run - SDK compatibility endpoint"""
-    # This is the same as stream_run but with different URL for SDK compatibility
-    return await stream_run(thread_id, run_id, last_event_id, stream_mode, user)
-
 
 @router.delete("/threads/{thread_id}/runs/{run_id}")
 async def delete_run(thread_id: str, run_id: str, user: User = Depends(get_current_user)):
@@ -301,9 +296,12 @@ async def execute_run_async(
     graph_id: str,
     input_data: dict,
     user: User,
-    config: Optional[dict] = None
+    config: Optional[dict] = None,
+    stream_mode: Optional[list[str]] = None
 ):
-    """Execute run asynchronously in background"""
+    """Execute run asynchronously in background using streaming to capture all events"""
+    from ..services.streaming_service import streaming_service
+    
     try:
         # Update status
         await update_run_status(run_id, "running")
@@ -315,20 +313,56 @@ async def execute_run_async(
         from ..services.langgraph_service import create_run_config
         run_config = create_run_config(run_id, thread_id, user, config or {})
         
-        # Execute the graph
-        result = await graph.ainvoke(input_data, config=run_config)
+        # Always execute using streaming to capture events for later replay
+        from ..services.event_store import store_sse_event
+        event_counter = 0
+        final_output = None
+        # Use streaming service's broker system to distribute events
+        async for raw_event in graph.astream(
+            input_data,
+            config=run_config,
+            stream_mode=stream_mode or RUN_STREAM_MODES,
+        ):
+            event_counter += 1
+            event_id = f"{run_id}_event_{event_counter}"
+            # Forward to broker for live consumers
+            await streaming_service.put_to_broker(run_id, event_id, raw_event)
+            
+            # Store for replay
+            await streaming_service.store_event_from_raw(run_id, event_id, raw_event)
+            
+            # Track final output
+            if isinstance(raw_event, tuple):
+                if len(raw_event) >= 2 and raw_event[0] == "values":
+                    final_output = raw_event[1]
+            elif not isinstance(raw_event, tuple):
+                # Non-tuple events are values mode
+                final_output = raw_event
+
+        # Signal end of stream
+        event_counter += 1
+        end_event_id = f"{run_id}_event_{event_counter}"
+        end_event = ("end", {"status": "completed", "final_output": final_output})
+        
+        await streaming_service.put_to_broker(run_id, end_event_id, end_event)
+        await streaming_service.store_event_from_raw(run_id, end_event_id, end_event)
         
         # Update with results
-        await update_run_status(run_id, "completed", output=result)
+        await update_run_status(run_id, "completed", output=final_output)
         
     except asyncio.CancelledError:
         await update_run_status(run_id, "cancelled")
+        # Signal cancellation to broker
+        await streaming_service.signal_run_cancelled(run_id)
         raise
     except Exception as e:
         await update_run_status(run_id, "failed", error=str(e))
+        # Signal error to broker
+        await streaming_service.signal_run_error(run_id, str(e))
         raise
     finally:
-        # Clean up
+        # Clean up broker
+        await streaming_service.cleanup_broker(run_id)
         active_runs.pop(run_id, None)
 
 
