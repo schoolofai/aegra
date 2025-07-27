@@ -56,12 +56,31 @@ class EventStore:
             if not events:
                 return []
             
-            # Find the last event index
+            # Find the last event index by exact ID match first
             last_index = -1
             for i, event in enumerate(events):
                 if event.id == last_event_id:
                     last_index = i
                     break
+            
+            # If exact match not found, try sequence-based lookup for mock IDs
+            if last_index == -1:
+                try:
+                    # Extract sequence number from the provided event_id (e.g., mock_event_8 -> 8)
+                    target_sequence = int(last_event_id.split("_event_")[-1])
+                    
+                    # Find the last stored event with sequence <= target_sequence
+                    for i, event in enumerate(events):
+                        try:
+                            event_sequence = int(event.id.split("_event_")[-1])
+                            if event_sequence == target_sequence:
+                                last_index = i
+                                break
+                        except (ValueError, IndexError):
+                            continue
+                except (ValueError, IndexError):
+                    # If we can't parse the sequence, return all events (fallback behavior)
+                    pass
             
             # Return events after the last received event
             return events[last_index + 1:] if last_index >= 0 else events

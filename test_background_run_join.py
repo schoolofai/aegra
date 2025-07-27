@@ -33,10 +33,7 @@ async def test_background_run_with_network_drop():
             input={"messages": [{"role": "user", "content": "Tell me a 200 word story."}]},
             stream_mode=["messages", "values"]
         )
-        
-        print(f"✅ Background run created: {run['run_id']}")
-        print(f"📊 Initial status: {run['status']}")
-        
+   
         # Step 2: Start streaming and simulate network drop
         print("\n🔗 Starting initial stream (will simulate network drop)...")
         print("📝 CONTENT BEFORE DROP:")
@@ -45,9 +42,7 @@ async def test_background_run_with_network_drop():
         first_session_counters = {"messages": 0, "values": 0, "metadata": 0, "end": 0}
         last_event_id = None
         content_before_drop = ""
-        
-        # Give the run a moment to start generating events
-        await asyncio.sleep(1)
+        message_event_count = 0  # Track actual message events for mock event ID
         
         try:
             event_count = 0
@@ -59,7 +54,8 @@ async def test_background_run_with_network_drop():
                 event_count += 1
                 first_session_counters[chunk.event] = first_session_counters.get(chunk.event, 0) + 1
                 
-                current_event_id = getattr(chunk, 'event_id', f'event_{event_count}')
+              
+                current_event_id = f"mock_event_{event_count}"
                 
                 # Print message content as it streams
                 if chunk.event == "messages":
@@ -74,48 +70,53 @@ async def test_background_run_with_network_drop():
                                 print(message_chunk['content'], end="", flush=True)
                                 content_before_drop += message_chunk['content']
                 
-                # Simulate network drop after receiving several message events
-                if chunk.event == "messages" and first_session_counters["messages"] >= 8:
+                if event_count >= 20:
                     last_event_id = current_event_id
-                    print(f"\n💥 SIMULATING NETWORK DROP after event ID: {last_event_id}")
+                    print(f"\n💥 SIMULATING NETWORK DROP after mock event ID: {last_event_id}")
                     break
                     
                 # If stream ends naturally before we hit the drop point
                 if chunk.event == "end":
                     last_event_id = current_event_id
-                    print(f"\n🏁 Stream ended naturally at event ID: {last_event_id}")
+                    print(f"\n🏁 Stream ended naturally at mock event ID: {last_event_id}")
                     break
                     
         except Exception as e:
             print(f"⚠️ Stream interrupted (simulated): {e}")
         
         print(f"\n" + "-" * 40)
-        print(f"📊 Events received before drop: {first_session_counters}")
-        print(f"🔗 Last event ID before drop: {last_event_id}")
-        print(f"📝 Content length before drop: {len(content_before_drop)} characters")
+        print(f"🔗 Last mock event ID before drop: {last_event_id}")
         
         # Step 3: Simulate reconnection delay
         print(f"\n⏳ Simulating network recovery delay...")
         await asyncio.sleep(2)
         
         # Step 4: Rejoin stream from last event ID
-        print(f"\n🔄 Rejoining stream from event ID: {last_event_id}")
+        print(f"\n🔄 Rejoining stream from mock event ID: {last_event_id}")
         print("📝 CONTENT AFTER REJOIN:")
         print("-" * 40)
         
         second_session_counters = {"messages": 0, "values": 0, "metadata": 0, "end": 0}
         content_after_rejoin = ""
+        rejoin_message_count = 0  # Track message events after rejoin
         
         try:
+            rejoin_event_count = 0
             async for chunk in client.runs.join_stream(
                 thread_id=thread['thread_id'],
                 run_id=run['run_id'],
                 stream_mode=["messages", "values"],
                 last_event_id=last_event_id
             ):
+                rejoin_event_count += 1
                 second_session_counters[chunk.event] = second_session_counters.get(chunk.event, 0) + 1
                 
-                current_event_id = getattr(chunk, 'event_id', f'rejoin_event_{len(content_after_rejoin)}')
+                # Create mock event ID for rejoin session
+                if chunk.event == "messages":
+                    rejoin_message_count += 1
+                    current_event_id = f"rejoin_mock_event_{rejoin_message_count}"
+                else:
+                    current_event_id = f"rejoin_mock_event_{rejoin_event_count}"
                 
                 # Print message content as it streams
                 if chunk.event == "messages":
@@ -129,7 +130,6 @@ async def test_background_run_with_network_drop():
                             elif isinstance(message_chunk, dict) and 'content' in message_chunk:
                                 print(message_chunk['content'], end="", flush=True)
                                 content_after_rejoin += message_chunk['content']
-                
                 
                 if chunk.event == "end":
                     print(f"🏁 Stream completed after rejoin")

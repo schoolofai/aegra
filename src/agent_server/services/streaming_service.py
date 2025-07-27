@@ -144,7 +144,7 @@ class StreamingService:
         self, 
         run: Run, 
         user: User, 
-        from_event_id: Optional[str] = None,
+        last_event_id: Optional[str] = None,
         config: Optional[Dict[str, Any]] = None,
         stream_mode: Optional[list[str]] = None
     ) -> AsyncIterator[str]:
@@ -152,19 +152,18 @@ class StreamingService:
         run_id = run.run_id
         try:
             # -------- Replay stored events once --------
-            if from_event_id:
-                stored_events = await event_store.get_events_since(run_id, from_event_id)
+            if last_event_id:
+                stored_events = await event_store.get_events_since(run_id, last_event_id)
             else:
                 stored_events = await event_store.get_all_events(run_id)
 
-            last_sent_event_id: Optional[str] = from_event_id
-            last_sent_sequence: int = self._extract_event_sequence(from_event_id) if from_event_id else 0
+            last_sent_event_id: Optional[str] = last_event_id
+            last_sent_sequence: int = self._extract_event_sequence(last_event_id) if last_event_id else 0
 
             # Replay stored events
             for ev in stored_events:
                 sse_event = self._stored_event_to_sse(run_id, ev)
                 if sse_event:
-                    print(f"replay last sent event id: {last_sent_event_id}")
                     yield sse_event
                     last_sent_event_id = ev.id
                     last_sent_sequence = self._extract_event_sequence(ev.id)
@@ -175,9 +174,6 @@ class StreamingService:
             
             # Consume live events from broker if run is still active
             async for event_id, raw_event in self.consume_broker(run_id):
-                print("last sent event id: ", last_sent_event_id)
-                print("this is the event id: ", event_id)
-                
                 # Skip duplicates that were already replayed - compare numeric sequences
                 current_sequence = self._extract_event_sequence(event_id)
                 if last_sent_event_id is not None and current_sequence <= last_sent_sequence:
@@ -185,7 +181,6 @@ class StreamingService:
 
                 sse_event = await self._convert_raw_to_sse(event_id, raw_event)
                 if sse_event:
-                    # print(f"🔄 SSE queue event: {sse_event}")
                     yield sse_event
                     last_sent_event_id = event_id
                     last_sent_sequence = current_sequence
