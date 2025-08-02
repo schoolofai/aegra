@@ -13,8 +13,10 @@ class DatabaseManager:
     
     def __init__(self):
         self.engine: Optional[AsyncEngine] = None
-        self.checkpointer: Optional[AsyncPostgresSaver] = None
-        self.store: Optional[AsyncPostgresStore] = None
+        self._checkpointer: Optional[AsyncPostgresSaver] = None
+        self._checkpointer_cm = None  # holds the contextmanager so we can close it
+        self._store: Optional[AsyncPostgresStore] = None
+        self._store_cm = None
         self._database_url = os.getenv(
             "DATABASE_URL", 
             "postgresql+asyncpg://user:password@localhost:5432/langgraph_agent_server"
@@ -96,22 +98,48 @@ class DatabaseManager:
         """Close database connections"""
         if self.engine:
             await self.engine.dispose()
-        
-        # LangGraph components are now created on demand as context managers
+
+        # Close the cached checkpointer if we opened one
+        if self._checkpointer_cm is not None:
+            await self._checkpointer_cm.__aexit__(None, None, None)
+            self._checkpointer_cm = None
+            self._checkpointer = None
+
+        if self._store_cm is not None:
+            await self._store_cm.__aexit__(None, None, None)
+            self._store_cm = None
+            self._store = None
         
         print("✅ Database connections closed")
     
-    def get_checkpointer(self):
-        """Get a LangGraph checkpointer context manager"""
+    async def get_checkpointer(self) -> AsyncPostgresSaver:
+        """Return a live AsyncPostgresSaver.
+
+        We enter the async context manager once and cache the saver so that
+        subsequent calls reuse the same database connection pool.  LangGraph
+        expects the *real* saver object (it calls methods like
+        ``get_next_version``), so returning the context manager wrapper would
+        fail.
+        """
         if not hasattr(self, '_langgraph_dsn'):
             raise RuntimeError("Database not initialized")
-        return AsyncPostgresSaver.from_conn_string(self._langgraph_dsn)
+        if self._checkpointer is None:
+            self._checkpointer_cm = AsyncPostgresSaver.from_conn_string(self._langgraph_dsn)
+            self._checkpointer = await self._checkpointer_cm.__aenter__()
+            # Ensure required tables exist (idempotent)
+            await self._checkpointer.setup()
+        return self._checkpointer
     
-    def get_store(self):
-        """Get a LangGraph store context manager"""
+    async def get_store(self) -> AsyncPostgresStore:
+        """Return a live AsyncPostgresStore instance (vector + KV)."""
         if not hasattr(self, '_langgraph_dsn'):
-            raise RuntimeError("Database not initialized") 
-        return AsyncPostgresStore.from_conn_string(self._langgraph_dsn)
+            raise RuntimeError("Database not initialized")
+        if self._store is None:
+            self._store_cm = AsyncPostgresStore.from_conn_string(self._langgraph_dsn)
+            self._store = await self._store_cm.__aenter__()
+            # ensure schema
+            await self._store.setup()
+        return self._store
     
     def get_engine(self) -> AsyncEngine:
         """Get the SQLAlchemy engine for metadata tables"""

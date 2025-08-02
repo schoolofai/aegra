@@ -61,13 +61,27 @@ class LangGraphService:
         from ..core.database import db_manager
         
         if hasattr(base_graph, 'compile'):
-            # Base graph is not compiled yet - compile with basic execution (no persistence for now)
-            print(f"🔧 Compiling graph '{graph_id}' without persistence for testing")
-            compiled_graph = base_graph.compile()
+            # The module exported an *uncompiled* StateGraph – compile it now with
+            # a Postgres checkpointer for durable state.
+            from ..core.database import db_manager
+            checkpointer_cm = await db_manager.get_checkpointer()
+            store_cm = await db_manager.get_store()
+            print(f"🔧 Compiling graph '{graph_id}' with Postgres persistence")
+            compiled_graph = base_graph.compile(checkpointer=checkpointer_cm, store=store_cm)
         else:
-            # Graph is already compiled - use as-is for now
-            print(f"🔧 Using pre-compiled graph '{graph_id}' as-is")
-            compiled_graph = base_graph
+            # Graph was already compiled by the module.  Create a shallow copy
+            # that injects our Postgres checkpointer *unless* the author already
+            # set one.
+            from ..core.database import db_manager
+            checkpointer_cm = await db_manager.get_checkpointer()
+            try:
+                store_cm = await db_manager.get_store()
+                compiled_graph = base_graph.copy(update={"checkpointer": checkpointer_cm, "store": store_cm})
+                print(f"🔧 Wrapped pre-compiled graph '{graph_id}' with Postgres persistence via copy()")
+            except Exception:
+                # Fallback: property may be immutably set; run as-is with warning
+                print(f"⚠️  Pre-compiled graph '{graph_id}' does not support checkpointer injection; running without persistence")
+                compiled_graph = base_graph
         
         # Cache the compiled graph
         self._graph_cache[graph_id] = compiled_graph
