@@ -161,15 +161,39 @@ def create_thread_config(thread_id: str, user, additional_config: Dict = None) -
 
 
 def create_run_config(run_id: str, thread_id: str, user, additional_config: Dict = None) -> Dict:
-    """Create LangGraph configuration for a specific run with full context"""
-    base_config = {
-        "configurable": {
-            "thread_id": thread_id,
-            "run_id": run_id
-        }
-    }
-    
-    if additional_config:
-        base_config.update(additional_config)
-    
-    return inject_user_context(user, base_config)
+    """Create LangGraph configuration for a specific run with full context.
+
+    The function is *additive*: it never removes or renames anything the client
+    supplied.  We simply ensure a `configurable` dict exists and then merge a
+    few server-side keys so graph nodes can rely on them.
+    """
+    from copy import deepcopy
+
+    cfg: Dict = deepcopy(additional_config) if additional_config else {}
+
+    # Ensure a configurable section exists
+    cfg.setdefault("configurable", {})
+
+    # Merge server-provided fields (do NOT overwrite if client already set)
+    cfg["configurable"].setdefault("thread_id", thread_id)
+    cfg["configurable"].setdefault("run_id", run_id)
+
+    # Basic user identity for multi-tenant scoping
+    cfg["configurable"].setdefault("user_id", user.identity)
+    cfg["configurable"].setdefault(
+        "user_display_name", getattr(user, "display_name", user.identity)
+    )
+
+    # Full auth payload so graph nodes can do things like
+    #   auth_ctx = config["configurable"]["langgraph_auth_user"]
+    if "langgraph_auth_user" not in cfg["configurable"]:
+        try:
+            cfg["configurable"]["langgraph_auth_user"] = user.to_dict()  # type: ignore[attr-defined]
+        except Exception:
+            # Fallback: minimal dict if to_dict unavailable
+            cfg["configurable"]["langgraph_auth_user"] = {
+                "identity": user.identity
+            }
+
+    # Finally inject any remaining user context via existing helper
+    return inject_user_context(user, cfg)

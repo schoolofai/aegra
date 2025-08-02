@@ -18,9 +18,22 @@ class ChatState(TypedDict):
     messages: List[BaseMessage]
 
 
-async def call_llm(state: ChatState) -> ChatState:
-    """Call the LLM with the current messages"""
-    
+from langchain_core.runnables import RunnableConfig
+
+
+async def call_llm(state: ChatState, config: RunnableConfig | None = None) -> ChatState:
+    """Call the LLM with the current messages.
+
+    For debugging we log / print any custom keys that reached us via
+    ``config`` to prove the server’s pass-through behaviour.
+    """
+
+    if config is not None:
+        dbg_meta = config.get("metadata", {})
+        dbg_cfg  = config.get("configurable", {})
+        print("🔧 call_llm received config metadata:", dbg_meta)
+        print("🔧 call_llm received configurable keys:", dbg_cfg.keys())
+
     # Initialize OpenAI LLM
     llm = ChatOpenAI(
         model="gpt-4o-mini",

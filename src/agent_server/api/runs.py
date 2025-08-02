@@ -318,26 +318,28 @@ async def execute_run_async(
         event_counter = 0
         final_output = None
         # Use streaming service's broker system to distribute events
-        async for raw_event in graph.astream(
-            input_data,
-            config=run_config,
-            stream_mode=stream_mode or RUN_STREAM_MODES,
-        ):
-            event_counter += 1
-            event_id = f"{run_id}_event_{event_counter}"
-            # Forward to broker for live consumers
-            await streaming_service.put_to_broker(run_id, event_id, raw_event)
+        from ..core.auth_ctx import with_auth_ctx
+        async with with_auth_ctx(user, []):
+            async for raw_event in graph.astream(
+                input_data,
+                config=run_config,
+                stream_mode=stream_mode or RUN_STREAM_MODES,
+            ):
+                event_counter += 1
+                event_id = f"{run_id}_event_{event_counter}"
+                # Forward to broker for live consumers
+                await streaming_service.put_to_broker(run_id, event_id, raw_event)
             
-            # Store for replay
-            await streaming_service.store_event_from_raw(run_id, event_id, raw_event)
+                # Store for replay
+                await streaming_service.store_event_from_raw(run_id, event_id, raw_event)
             
-            # Track final output
-            if isinstance(raw_event, tuple):
-                if len(raw_event) >= 2 and raw_event[0] == "values":
-                    final_output = raw_event[1]
-            elif not isinstance(raw_event, tuple):
-                # Non-tuple events are values mode
-                final_output = raw_event
+                # Track final output
+                if isinstance(raw_event, tuple):
+                    if len(raw_event) >= 2 and raw_event[0] == "values":
+                        final_output = raw_event[1]
+                elif not isinstance(raw_event, tuple):
+                    # Non-tuple events are values mode
+                    final_output = raw_event
 
         # Signal end of stream
         event_counter += 1

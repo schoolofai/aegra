@@ -144,6 +144,10 @@ async def test_chat_streaming_all_modes():
                 ]
             },
             stream_mode=["messages", "values"],
+            config={
+                "metadata": {"test_case": "config_passthrough"},
+                "configurable": {"custom_prompt": "(testing config passthrough)"}
+            },
         ):
             counters[chunk.event] = counters.get(chunk.event, 0) + 1
             if chunk.event == "messages":
