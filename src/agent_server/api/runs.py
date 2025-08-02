@@ -4,9 +4,9 @@ from uuid import uuid4
 from datetime import datetime
 from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Depends, Header, Query
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from ..core.orm import Assistant as AssistantORM, get_session
+from ..core.orm import Assistant as AssistantORM, Thread as ThreadORM, get_session
 from fastapi.responses import StreamingResponse
 
 from ..models import Run, RunCreate, RunList, RunStatus, User
@@ -22,6 +22,32 @@ _runs_db = {}
 
 # Global task registry for run management
 active_runs: Dict[str, asyncio.Task] = {}
+
+
+async def set_thread_status(session: AsyncSession, thread_id: str, status: str):
+    """Update the status column of a thread."""
+    await session.execute(
+        update(ThreadORM)
+        .where(ThreadORM.thread_id == thread_id)
+        .values(status=status, updated_at=datetime.utcnow())
+    )
+    await session.commit()
+
+
+async def update_thread_metadata(session: AsyncSession, thread_id: str, assistant_id: str, graph_id: str):
+    """Update thread metadata with assistant and graph information."""
+    await session.execute(
+        update(ThreadORM)
+        .where(ThreadORM.thread_id == thread_id)
+        .values(
+            metadata_json=ThreadORM.metadata_json.concat({
+                "assistantId": str(assistant_id),  # Convert UUID to string
+                "graphId": graph_id,
+            }),
+            updated_at=datetime.utcnow()
+        )
+    )
+    await session.commit()
 
 # Default stream modes for background run execution
 RUN_STREAM_MODES = ["messages", "values", "custom"]
@@ -54,6 +80,10 @@ async def create_run(
     available_graphs = langgraph_service.list_graphs()
     if assistant.graph_id not in available_graphs:
         raise HTTPException(404, f"Graph '{assistant.graph_id}' not found for assistant")
+
+    # Mark thread as busy and update metadata with assistant/graph info
+    await set_thread_status(session, thread_id, "busy")
+    await update_thread_metadata(session, thread_id, assistant.assistant_id, assistant.graph_id)
     
     # Create run record
     run = Run(
@@ -71,7 +101,7 @@ async def create_run(
     _runs_db[run_id] = run
     
     # Start execution asynchronously
-    task = asyncio.create_task(execute_run_async(run_id, thread_id, assistant.graph_id, request.input, user, request.config, request.stream_mode))
+    task = asyncio.create_task(execute_run_async(run_id, thread_id, assistant.graph_id, request.input, user, request.config, request.stream_mode, session))
     active_runs[run_id] = task
     
     return run
@@ -104,6 +134,10 @@ async def create_and_stream_run(
     available_graphs = langgraph_service.list_graphs()
     if assistant.graph_id not in available_graphs:
         raise HTTPException(404, f"Graph '{assistant.graph_id}' not found for assistant")
+
+    # Mark thread as busy and update metadata with assistant/graph info
+    await set_thread_status(session, thread_id, "busy")
+    await update_thread_metadata(session, thread_id, assistant.assistant_id, assistant.graph_id)
     
     # Create run record
     run = Run(
@@ -121,7 +155,7 @@ async def create_and_stream_run(
     _runs_db[run_id] = run
     
     # Start background execution that will populate the broker
-    task = asyncio.create_task(execute_run_async(run_id, thread_id, assistant.graph_id, request.input, user, request.config, request.stream_mode))
+    task = asyncio.create_task(execute_run_async(run_id, thread_id, assistant.graph_id, request.input, user, request.config, request.stream_mode, session))
     active_runs[run_id] = task
     
     # Extract requested stream mode(s) - not used for broker consumption but kept for compatibility
@@ -302,7 +336,8 @@ async def execute_run_async(
     input_data: dict,
     user: User,
     config: Optional[dict] = None,
-    stream_mode: Optional[list[str]] = None
+    stream_mode: Optional[list[str]] = None,
+    session: Optional[AsyncSession] = None
 ):
     """Execute run asynchronously in background using streaming to capture all events"""
     from ..services.streaming_service import streaming_service
@@ -356,14 +391,24 @@ async def execute_run_async(
         
         # Update with results
         await update_run_status(run_id, "completed", output=final_output)
+        # Mark thread back to idle
+        if not session:
+            raise RuntimeError(f"No database session available to update thread {thread_id} status")
+        await set_thread_status(session, thread_id, "idle")
         
     except asyncio.CancelledError:
         await update_run_status(run_id, "cancelled")
+        if not session:
+            raise RuntimeError(f"No database session available to update thread {thread_id} status")
+        await set_thread_status(session, thread_id, "idle")
         # Signal cancellation to broker
         await streaming_service.signal_run_cancelled(run_id)
         raise
     except Exception as e:
         await update_run_status(run_id, "failed", error=str(e))
+        if not session:
+            raise RuntimeError(f"No database session available to update thread {thread_id} status")
+        await set_thread_status(session, thread_id, "idle")
         # Signal error to broker
         await streaming_service.signal_run_error(run_id, str(e))
         raise
