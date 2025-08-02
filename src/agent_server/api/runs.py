@@ -4,6 +4,9 @@ from uuid import uuid4
 from datetime import datetime
 from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Depends, Header, Query
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from ..core.orm import Assistant as AssistantORM, get_session
 from fastapi.responses import StreamingResponse
 
 from ..models import Run, RunCreate, RunList, RunStatus, User
@@ -26,9 +29,10 @@ RUN_STREAM_MODES = ["messages", "values", "custom"]
 
 @router.post("/threads/{thread_id}/runs", response_model=Run)
 async def create_run(
-    thread_id: str, 
+    thread_id: str,
     request: RunCreate,
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
 ):
     """Create and execute a new run"""
     
@@ -38,12 +42,12 @@ async def create_run(
     langgraph_service = get_langgraph_service()
     
     # Validate assistant exists and get its graph_id
-    from .assistants import _assistants_db
-    if request.assistant_id not in _assistants_db:
-        raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
-    
-    assistant = _assistants_db[request.assistant_id]
-    if assistant.user_id != user.identity:
+    assistant_stmt = select(AssistantORM).where(
+        AssistantORM.assistant_id == request.assistant_id,
+        AssistantORM.user_id == user.identity
+    )
+    assistant = await session.scalar(assistant_stmt)
+    if not assistant:
         raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
     
     # Validate the assistant's graph exists
@@ -75,9 +79,10 @@ async def create_run(
 
 @router.post("/threads/{thread_id}/runs/stream")
 async def create_and_stream_run(
-    thread_id: str, 
+    thread_id: str,
     request: RunCreate,
-    user: User = Depends(get_current_user)
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
 ):
     """Create a new run and stream its execution - LangGraph compatible"""
     
@@ -87,12 +92,12 @@ async def create_and_stream_run(
     langgraph_service = get_langgraph_service()
     
     # Validate assistant exists and get its graph_id
-    from .assistants import _assistants_db
-    if request.assistant_id not in _assistants_db:
-        raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
-    
-    assistant = _assistants_db[request.assistant_id]
-    if assistant.user_id != user.identity:
+    assistant_stmt = select(AssistantORM).where(
+        AssistantORM.assistant_id == request.assistant_id,
+        AssistantORM.user_id == user.identity
+    )
+    assistant = await session.scalar(assistant_stmt)
+    if not assistant:
         raise HTTPException(404, f"Assistant '{request.assistant_id}' not found")
     
     # Validate the assistant's graph exists

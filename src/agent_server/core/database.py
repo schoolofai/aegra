@@ -50,7 +50,7 @@ class DatabaseManager:
         async with self.engine.begin() as conn:
             # Create tables one by one (asyncpg doesn't support multiple statements)
             await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS assistants (
+                CREATE TABLE IF NOT EXISTS assistant (
                     assistant_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                     name TEXT NOT NULL,
                     description TEXT,
@@ -66,7 +66,7 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS runs (
                     run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
                     thread_id TEXT NOT NULL,
-                    assistant_id UUID REFERENCES assistants(assistant_id),
+                    assistant_id UUID REFERENCES assistant(assistant_id),
                     status TEXT DEFAULT 'pending',
                     input JSONB,
                     output JSONB,
@@ -89,7 +89,8 @@ class DatabaseManager:
             """))
             
             # Create indexes
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_assistants_user ON assistants(user_id)"))
+            await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_assistant_user_graph ON assistant(user_id, graph_id)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_assistant_user ON assistant(user_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_thread_id ON runs(thread_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_user ON runs(user_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_thread_user ON thread(user_id)"))
