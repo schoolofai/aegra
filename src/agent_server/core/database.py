@@ -78,7 +78,7 @@ class DatabaseManager:
             """))
             
             await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS thread_metadata (
+                CREATE TABLE IF NOT EXISTS thread (
                     thread_id TEXT PRIMARY KEY,
                     status TEXT DEFAULT 'idle',
                     metadata JSONB DEFAULT '{}',
@@ -92,7 +92,7 @@ class DatabaseManager:
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_assistants_user ON assistants(user_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_thread_id ON runs(thread_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_user ON runs(user_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_thread_user ON thread_metadata(user_id)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_thread_user ON thread(user_id)"))
     
     async def close(self):
         """Close database connections"""
