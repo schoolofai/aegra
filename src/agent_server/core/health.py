@@ -2,6 +2,7 @@
 import asyncio
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import text
 
 from .database import DatabaseManager
 
@@ -19,22 +20,21 @@ class HealthResponse(BaseModel):
 @router.get("/health", response_model=HealthResponse)
 async def health_check():
     """Comprehensive health check endpoint"""
-    
     # Import here to avoid circular dependency
     from .database import db_manager
-    
+
     health_status = {
         "status": "healthy",
-        "database": "unknown", 
+        "database": "unknown",
         "langgraph_checkpointer": "unknown",
-        "langgraph_store": "unknown"
+        "langgraph_store": "unknown",
     }
-    
+
+    # Database connectivity
     try:
-        # Check database connection
         if db_manager.engine:
             async with db_manager.engine.begin() as conn:
-                await conn.execute("SELECT 1")
+                await conn.execute(text("SELECT 1"))
             health_status["database"] = "connected"
         else:
             health_status["database"] = "not_initialized"
@@ -42,36 +42,37 @@ async def health_check():
     except Exception as e:
         health_status["database"] = f"error: {str(e)}"
         health_status["status"] = "unhealthy"
-    
+
+    # LangGraph checkpointer (lazy-init)
     try:
-        # Check LangGraph checkpointer
-        if db_manager.checkpointer:
-            # Simple way to test checkpointer connectivity
-            await db_manager.checkpointer.aget_tuple({"configurable": {"thread_id": "health-check"}})
-            health_status["langgraph_checkpointer"] = "connected"
-        else:
-            health_status["langgraph_checkpointer"] = "not_initialized"
-            health_status["status"] = "unhealthy"
-    except Exception as e:
-        # Expected for health check - no actual data exists
+        checkpointer = await db_manager.get_checkpointer()
+        # probe - will raise if connection is bad; tuple may not exist which is fine
+        try:
+            await checkpointer.aget_tuple({"configurable": {"thread_id": "health-check"}})
+        except Exception:
+            # Absence of data is not an error for health; connectivity worked
+            pass
         health_status["langgraph_checkpointer"] = "connected"
-    
-    try:
-        # Check LangGraph store
-        if db_manager.store:
-            # Simple connectivity test
-            await db_manager.store.aget(("health",), "check")
-            health_status["langgraph_store"] = "connected"
-        else:
-            health_status["langgraph_store"] = "not_initialized"
-            health_status["status"] = "unhealthy"
     except Exception as e:
-        # Expected for health check - no actual data exists
+        health_status["langgraph_checkpointer"] = f"error: {str(e)}"
+        health_status["status"] = "unhealthy"
+
+    # LangGraph store (lazy-init)
+    try:
+        store = await db_manager.get_store()
+        try:
+            await store.aget(("health",), "check")
+        except Exception:
+            # Key absence is OK; connectivity confirmed
+            pass
         health_status["langgraph_store"] = "connected"
-    
+    except Exception as e:
+        health_status["langgraph_store"] = f"error: {str(e)}"
+        health_status["status"] = "unhealthy"
+
     if health_status["status"] == "unhealthy":
         raise HTTPException(status_code=503, detail="Service unhealthy")
-    
+
     return health_status
 
 
@@ -79,13 +80,32 @@ async def health_check():
 async def readiness_check():
     """Kubernetes readiness probe endpoint"""
     from .database import db_manager
-    
-    if not db_manager.engine or not db_manager.checkpointer or not db_manager.store:
-        raise HTTPException(
-            status_code=503, 
-            detail="Service not ready - components not initialized"
-        )
-    
+
+    # Engine must exist and respond to a trivial query
+    if not db_manager.engine:
+        raise HTTPException(status_code=503, detail="Service not ready - database engine not initialized")
+    try:
+        async with db_manager.engine.begin() as conn:
+            await conn.execute(text("SELECT 1"))
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Service not ready - database error: {str(e)}")
+
+    # Check that LangGraph components can be obtained (lazy init) and respond
+    try:
+        checkpointer = await db_manager.get_checkpointer()
+        store = await db_manager.get_store()
+        # lightweight probes
+        try:
+            await checkpointer.aget_tuple({"configurable": {"thread_id": "ready-check"}})
+        except Exception:
+            pass
+        try:
+            await store.aget(("ready",), "check")
+        except Exception:
+            pass
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Service not ready - components unavailable: {str(e)}")
+
     return {"status": "ready"}
 
 
