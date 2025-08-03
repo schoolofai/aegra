@@ -1,11 +1,11 @@
 """Run endpoints for Agent Protocol"""
 import asyncio
-from uuid import uuid4, UUID
+from uuid import uuid4
 from datetime import datetime
 from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Depends, Header, Query
 import logging
-from sqlalchemy import select, update
+from sqlalchemy import select, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.orm import Assistant as AssistantORM, Thread as ThreadORM, get_session
 from fastapi.responses import StreamingResponse
@@ -17,11 +17,6 @@ from ..services.langgraph_service import get_langgraph_service
 
 router = APIRouter()
 
-def _to_uuid(value: str, name: str) -> UUID:
-    try:
-        return UUID(str(value))
-    except Exception:
-        raise HTTPException(422, f"{name} must be a valid UUID")
 logger = logging.getLogger(__name__)
 # TODO: Replace all print statements and bare exceptions with structured logging across the codebase
 
@@ -78,11 +73,12 @@ async def create_run(
 
     # Get LangGraph service
     langgraph_service = get_langgraph_service()
+    print(f"create_run: scheduling background task run_id={run_id} thread_id={thread_id} user={user.identity}")
+    print(f"[create_run] scheduling background task run_id={run_id} thread_id={thread_id} user={user.identity}")
 
-    # Validate assistant exists and get its graph_id (coerce to UUID)
-    assistant_uuid = _to_uuid(request.assistant_id, "assistant_id")
+    # Validate assistant exists and get its graph_id (IDs are plain strings)
     assistant_stmt = select(AssistantORM).where(
-        AssistantORM.assistant_id == assistant_uuid,
+        AssistantORM.assistant_id == str(request.assistant_id),
         AssistantORM.user_id == user.identity
     )
     assistant = await session.scalar(assistant_stmt)
@@ -102,9 +98,9 @@ async def create_run(
     from ..core.orm import Run as RunORM
     now = datetime.utcnow()
     run_orm = RunORM(
-        run_id=run_id,  # string here is okay because ORM column has server_default; DB will generate if omitted
+        run_id=run_id,  # explicitly set (DB can also default-generate if omitted)
         thread_id=thread_id,
-        assistant_id=assistant_uuid,
+        assistant_id=str(request.assistant_id),
         status="pending",
         input=request.input or {},
         config=request.config or {},
@@ -138,6 +134,7 @@ async def create_run(
             run_id, thread_id, assistant.graph_id, request.input or {}, user, request.config, request.stream_mode, session
         )
     )
+    print(f"[create_run] background task created task_id={id(task)} for run_id={run_id}")
     active_runs[run_id] = task
 
     return run
@@ -155,11 +152,11 @@ async def create_and_stream_run(
 
     # Get LangGraph service
     langgraph_service = get_langgraph_service()
+    print(f"[create_and_stream_run] scheduling background task run_id={run_id} thread_id={thread_id} user={user.identity}")
 
-    # Validate assistant exists and get its graph_id (coerce to UUID)
-    assistant_uuid = _to_uuid(request.assistant_id, "assistant_id")
+    # Validate assistant exists and get its graph_id (IDs are plain strings)
     assistant_stmt = select(AssistantORM).where(
-        AssistantORM.assistant_id == assistant_uuid,
+        AssistantORM.assistant_id == str(request.assistant_id),
         AssistantORM.user_id == user.identity
     )
     assistant = await session.scalar(assistant_stmt)
@@ -181,7 +178,7 @@ async def create_and_stream_run(
     run_orm = RunORM(
         run_id=run_id,
         thread_id=thread_id,
-        assistant_id=assistant_uuid,
+        assistant_id=str(request.assistant_id),
         status="streaming",
         input=request.input or {},
         config=request.config or {},
@@ -215,6 +212,7 @@ async def create_and_stream_run(
             run_id, thread_id, assistant.graph_id, request.input or {}, user, request.config, request.stream_mode, session
         )
     )
+    print(f"[create_and_stream_run] background task created task_id={id(task)} for run_id={run_id}")
     active_runs[run_id] = task
 
     # Extract requested stream mode(s)
@@ -246,15 +244,16 @@ async def get_run(
     """Get run by ID (persisted)."""
     from ..core.orm import Run as RunORM
     stmt = select(RunORM).where(
-        RunORM.run_id == run_id,
+        RunORM.run_id == str(run_id),
         RunORM.thread_id == thread_id,
         RunORM.user_id == user.identity,
     )
+    print(f"[get_run] querying DB run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(stmt)
     if not run_orm:
         raise HTTPException(404, f"Run '{run_id}' not found")
 
-    logger.debug("get_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run_orm.status)
+    print(f"[get_run] found run status={run_orm.status} user={user.identity} thread_id={thread_id} run_id={run_id}")
     # Convert to Pydantic
     return Run.model_validate({c.name: getattr(run_orm, c.name) for c in run_orm.__table__.columns})
 
@@ -271,10 +270,11 @@ async def list_runs(
         RunORM.thread_id == thread_id,
         RunORM.user_id == user.identity,
     ).order_by(RunORM.created_at.desc())
+    print(f"[list_runs] querying DB thread_id={thread_id} user={user.identity}")
     result = await session.scalars(stmt)
     rows = result.all()
     runs = [Run.model_validate({c.name: getattr(r, c.name) for c in r.__table__.columns}) for r in rows]
-    logger.debug("list_runs: user=%s thread_id=%s total=%d", user.identity, thread_id, len(runs))
+    print(f"[list_runs] total={len(runs)} user={user.identity} thread_id={thread_id}")
     return RunList(runs=runs, total=len(runs))
 
 
@@ -288,10 +288,10 @@ async def update_run(
 ):
     """Update run status (for cancellation/interruption, persisted)."""
     from ..core.orm import Run as RunORM
-    run_uuid = _to_uuid(run_id, "run_id")
+    print(f"[update_run] fetch for update run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
         select(RunORM).where(
-            RunORM.run_id == run_uuid,
+            RunORM.run_id == str(run_id),
             RunORM.thread_id == thread_id,
             RunORM.user_id == user.identity,
         )
@@ -303,19 +303,23 @@ async def update_run(
     from ..services.streaming_service import streaming_service
 
     if request.status == "cancelled":
-        logger.info("update_run: cancelling run_id=%s user=%s thread_id=%s", run_id, user.identity, thread_id)
+        print(f"[update_run] cancelling run_id={run_id} user={user.identity} thread_id={thread_id}")
         await streaming_service.cancel_run(run_id)
+        print(f"[update_run] set DB status=cancelled run_id={run_id}")
         await session.execute(
-            update(RunORM).where(RunORM.run_id == run_id).values(status="cancelled", updated_at=datetime.utcnow())
+            update(RunORM).where(RunORM.run_id == str(run_id)).values(status="cancelled", updated_at=datetime.utcnow())
         )
         await session.commit()
+        print(f"[update_run] commit done (cancelled) run_id={run_id}")
     elif request.status == "interrupted":
-        logger.info("update_run: interrupting run_id=%s user=%s thread_id=%s", run_id, user.identity, thread_id)
+        print(f"[update_run] interrupt run_id={run_id} user={user.identity} thread_id={thread_id}")
         await streaming_service.interrupt_run(run_id)
+        print(f"[update_run] set DB status=interrupted run_id={run_id}")
         await session.execute(
-            update(RunORM).where(RunORM.run_id == run_id).values(status="interrupted", updated_at=datetime.utcnow())
+            update(RunORM).where(RunORM.run_id == str(run_id)).values(status="interrupted", updated_at=datetime.utcnow())
         )
         await session.commit()
+        print(f"[update_run] commit done (interrupted) run_id={run_id}")
 
     # Return final run state
     run_orm = await session.scalar(select(RunORM).where(RunORM.run_id == run_id))
@@ -331,10 +335,10 @@ async def join_run(
 ):
     """Join a run (wait for completion and return final output) - persisted."""
     from ..core.orm import Run as RunORM
-    run_uuid = _to_uuid(run_id, "run_id")
+    print(f"[join_run] fetch for join run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
         select(RunORM).where(
-            RunORM.run_id == run_uuid,
+            RunORM.run_id == str(run_id),
             RunORM.thread_id == thread_id,
             RunORM.user_id == user.identity,
         )
@@ -342,18 +346,21 @@ async def join_run(
     if not run_orm:
         raise HTTPException(404, f"Run '{run_id}' not found")
 
-    logger.debug("join_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run_orm.status)
+    print(f"[join_run] current status={run_orm.status} user={user.identity} thread_id={thread_id} run_id={run_id}")
 
     # Wait for completion if not finished
     if run_orm.status not in ["completed", "failed", "cancelled"]:
         task = active_runs.get(run_id)
+        print(f"[join_run] active_runs has task={bool(task)} run_id={run_id}")
         if task:
             try:
+                print(f"[join_run] awaiting task_id={id(task)} run_id={run_id}")
                 await task  # Wait for completion
+                print(f"[join_run] task completed run_id={run_id}")
             except asyncio.CancelledError:
-                pass
-            except Exception:
-                pass
+                print(f"[join_run] task cancelled run_id={run_id}")
+            except Exception as e:
+                print(f"[join_run] task errored run_id={run_id} error={e}")
 
     # Reload final state from DB
     run_orm = await session.scalar(select(RunORM).where(RunORM.run_id == run_id))
@@ -371,9 +378,10 @@ async def stream_run(
 ):
     """Stream run execution with SSE and reconnection support - persisted metadata."""
     from ..core.orm import Run as RunORM
+    print(f"[stream_run] fetch for stream run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
         select(RunORM).where(
-            RunORM.run_id == run_id,
+            RunORM.run_id == str(run_id),
             RunORM.thread_id == thread_id,
             RunORM.user_id == user.identity,
         )
@@ -381,7 +389,7 @@ async def stream_run(
     if not run_orm:
         raise HTTPException(404, f"Run '{run_id}' not found")
 
-    logger.debug("stream_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run_orm.status)
+    print(f"[stream_run] status={run_orm.status} user={user.identity} thread_id={thread_id} run_id={run_id}")
     # If already terminal, emit a final end event
     if run_orm.status in ["completed", "failed", "cancelled"]:
         from ..core.sse import create_end_event
@@ -389,6 +397,7 @@ async def stream_run(
         async def generate_final():
             yield create_end_event()
 
+        print(f"[stream_run] starting terminal stream run_id={run_id} status={run_orm.status}")
         return StreamingResponse(
             generate_final(),
             media_type="text/event-stream",
@@ -402,7 +411,7 @@ async def stream_run(
     # Stream active or pending runs via broker
     from ..services.streaming_service import streaming_service
 
-    # Build a lightweight Pydantic Run from ORM for streaming context
+    # Build a lightweight Pydantic Run from ORM for streaming context (IDs already strings)
     run_model = Run.model_validate({c.name: getattr(run_orm, c.name) for c in run_orm.__table__.columns})
 
     return StreamingResponse(
@@ -436,6 +445,7 @@ async def cancel_run_endpoint(
     - wait=1 => await background task to finish settling
     """
     from ..core.orm import Run as RunORM
+    print(f"[cancel_run] fetch run run_id={run_id} thread_id={thread_id} user={user.identity}")
     run_orm = await session.scalar(
         select(RunORM).where(
             RunORM.run_id == run_id,
@@ -447,22 +457,21 @@ async def cancel_run_endpoint(
         raise HTTPException(404, f"Run '{run_id}' not found")
 
     from ..services.streaming_service import streaming_service
-    now = datetime.utcnow()
 
     if action == "interrupt":
-        logger.info("cancel_run_endpoint: interrupt run_id=%s user=%s thread_id=%s", run_id, user.identity, thread_id)
+        print(f"[cancel_run] interrupt run_id={run_id} user={user.identity} thread_id={thread_id}")
         await streaming_service.interrupt_run(run_id)
         # Persist status as interrupted
         await session.execute(
-            update(RunORM).where(RunORM.run_id == run_uuid).values(status="cancelled", updated_at=datetime.utcnow())
+            update(RunORM).where(RunORM.run_id == str(run_id)).values(status="interrupted", updated_at=datetime.utcnow())
         )
         await session.commit()
     else:
-        logger.info("cancel_run_endpoint: cancel run_id=%s user=%s thread_id=%s", run_id, user.identity, thread_id)
+        print(f"[cancel_run] cancel run_id={run_id} user={user.identity} thread_id={thread_id}")
         await streaming_service.cancel_run(run_id)
         # Persist status as cancelled
         await session.execute(
-            update(RunORM).where(RunORM.run_id == run_uuid).values(status="interrupted", updated_at=datetime.utcnow())
+            update(RunORM).where(RunORM.run_id == str(run_id)).values(status="cancelled", updated_at=datetime.utcnow())
         )
         await session.commit()
 
@@ -477,9 +486,7 @@ async def cancel_run_endpoint(
             except Exception:
                 pass
 
-    # Return updated Run
-    """Delete a run (persisted)."""
-    from ..core.orm import Run as RunORM
+    # Reload and return updated Run (do NOT delete here; deletion is a separate endpoint)
     run_orm = await session.scalar(
         select(RunORM).where(
             RunORM.run_id == run_id,
@@ -488,22 +495,8 @@ async def cancel_run_endpoint(
         )
     )
     if not run_orm:
-        raise HTTPException(404, f"Run '{run_id}' not found")
-
-    logger.info("delete_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run_orm.status)
-    # Cancel the run if it's still active
-    if run_orm.status in ["pending", "running", "streaming"]:
-        from ..services.streaming_service import streaming_service
-        await streaming_service.cancel_run(run_id)
-
-    # Remove from DB
-    await session.delete(run_orm)
-    await session.commit()
-
-    # Clean up active task if exists
-    task = active_runs.pop(run_id, None)
-    if task and not task.done():
-        task.cancel()
+        raise HTTPException(404, f"Run '{run_id}' not found after cancellation")
+    return Run.model_validate({c.name: getattr(run_orm, c.name) for c in run_orm.__table__.columns})
 
 
 async def execute_run_async(
@@ -529,24 +522,28 @@ async def execute_run_async(
         stream_mode = _normalize_mode(stream_mode)
     
     try:
+        print(f"[execute_run_async] ENTER run_id={run_id} thread_id={thread_id} graph_id={graph_id}")
         # Update status
         await update_run_status(run_id, "running", session=session)
-        logger.info("execute_run_async: started run_id=%s thread_id=%s", run_id, thread_id)
+        print(f"[execute_run_async] status->running run_id={run_id}")
         
         # Get graph and execute
         langgraph_service = get_langgraph_service()
+        print(f"[execute_run_async] fetching graph graph_id={graph_id}")
         graph = await langgraph_service.get_graph(graph_id)
+        print(f"[execute_run_async] graph fetched graph_id={graph_id} type={type(graph)}")
         
         from ..services.langgraph_service import create_run_config
         run_config = create_run_config(run_id, thread_id, user, config or {})
+        print(f"[execute_run_async] run_config created stream_mode={stream_mode or RUN_STREAM_MODES}")
         
         # Always execute using streaming to capture events for later replay
-        from ..services.event_store import store_sse_event
         event_counter = 0
         final_output = None
         # Use streaming service's broker system to distribute events
         from ..core.auth_ctx import with_auth_ctx
         async with with_auth_ctx(user, []):
+            print(f"[execute_run_async] entering astream loop run_id={run_id}")
             async for raw_event in graph.astream(
                 input_data,
                 config=run_config,
@@ -556,12 +553,9 @@ async def execute_run_async(
                 event_id = f"{run_id}_event_{event_counter}"
                 # Forward to broker for live consumers
                 await streaming_service.put_to_broker(run_id, event_id, raw_event)
-            
                 # Store for replay
                 await streaming_service.store_event_from_raw(run_id, event_id, raw_event)
-            
                 # Track final output
-                logger.debug("execute_run_async: event_id=%s run_id=%s", event_id, run_id)
                 if isinstance(raw_event, tuple):
                     if len(raw_event) >= 2 and raw_event[0] == "values":
                         final_output = raw_event[1]
@@ -573,41 +567,48 @@ async def execute_run_async(
         event_counter += 1
         end_event_id = f"{run_id}_event_{event_counter}"
         end_event = ("end", {"status": "completed", "final_output": final_output})
+        print(f"[execute_run_async] signalling end id={end_event_id}")
         
         await streaming_service.put_to_broker(run_id, end_event_id, end_event)
         await streaming_service.store_event_from_raw(run_id, end_event_id, end_event)
         
-        # Update with results
-        await update_run_status(run_id, "completed", output=final_output, session=session)
-        logger.info("execute_run_async: completed run_id=%s thread_id=%s", run_id, thread_id)
+        # Update with results (store empty JSON to avoid serialization issues for now)
+        await update_run_status(run_id, "completed", output={}, session=session)
+        print(f"[execute_run_async] COMPLETED run_id={run_id} thread_id={thread_id}")
         # Mark thread back to idle
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
+        print(f"[execute_run_async] thread status set idle thread_id={thread_id}")
         
     except asyncio.CancelledError:
-        await update_run_status(run_id, "cancelled", session=session)
+        print(f"[execute_run_async] CANCELLED run_id={run_id}")
+        # Store empty output to avoid JSON serialization issues
+        await update_run_status(run_id, "cancelled", output={}, session=session)
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
-        logger.info("execute_run_async: cancelled run_id=%s thread_id=%s", run_id, thread_id)
+        print(f"[execute_run_async] cancelled run_id={run_id} thread_id={thread_id}")
         # Signal cancellation to broker
         await streaming_service.signal_run_cancelled(run_id)
         raise
     except Exception as e:
-        await update_run_status(run_id, "failed", error=str(e), session=session)
+        print(f"[execute_run_async] EXCEPTION run_id={run_id} error={e}")
+        # Store empty output to avoid JSON serialization issues
+        await update_run_status(run_id, "failed", output={}, error=str(e), session=session)
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
-        logger.exception("execute_run_async: failed run_id=%s thread_id=%s error=%s", run_id, thread_id, str(e))
+        print(f"[execute_run_async] FAILED run_id={run_id} thread_id={thread_id} error={e}")
         # Signal error to broker
         await streaming_service.signal_run_error(run_id, str(e))
         raise
     finally:
         # Clean up broker
+        print(f"[execute_run_async] cleaning up broker and active_runs run_id={run_id}")
         await streaming_service.cleanup_run(run_id)
         active_runs.pop(run_id, None)
-        logger.debug("execute_run_async: cleaned up run_id=%s", run_id)
+        print(f"[execute_run_async] cleanup done run_id={run_id}")
 
 
 async def update_run_status(
@@ -628,18 +629,88 @@ async def update_run_status(
         # Here we assume update within the current session context where possible.
         pass
 
+
+@router.delete("/threads/{thread_id}/runs/{run_id}", status_code=204)
+async def delete_run(
+    thread_id: str,
+    run_id: str,
+    force: int = Query(0, ge=0, le=1, description="Force cancel active run before delete (1=yes)"),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Delete a run record.
+
+    Behavior:
+    - If the run is active (pending/running/streaming) and force=0, returns 409 Conflict.
+    - If force=1 and the run is active, cancels it first (best-effort) and then deletes.
+    - Always returns 204 No Content on successful deletion.
+    """
+    from ..core.orm import Run as RunORM
+    print(f"[delete_run] fetch run run_id={run_id} thread_id={thread_id} user={user.identity}")
+    run_orm = await session.scalar(
+        select(RunORM).where(
+            RunORM.run_id == str(run_id),
+            RunORM.thread_id == thread_id,
+            RunORM.user_id == user.identity,
+        )
+    )
+    if not run_orm:
+        raise HTTPException(404, f"Run '{run_id}' not found")
+
+    # If active and not forcing, reject deletion
+    if run_orm.status in ["pending", "running", "streaming"] and not force:
+        raise HTTPException(
+            status_code=409,
+            detail="Run is active. Retry with force=1 to cancel and delete.",
+        )
+
+    # If forcing and active, cancel first
+    if force and run_orm.status in ["pending", "running", "streaming"]:
+        from ..services.streaming_service import streaming_service
+        print(f"[delete_run] force-cancelling active run run_id={run_id}")
+        await streaming_service.cancel_run(run_id)
+        # Best-effort: wait for bg task to settle
+        task = active_runs.get(run_id)
+        if task:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+
+    # Delete the record
+    await session.execute(
+        delete(RunORM).where(
+            RunORM.run_id == str(run_id),
+            RunORM.thread_id == thread_id,
+            RunORM.user_id == user.identity,
+        )
+    )
+    await session.commit()
+
+    # Clean up active task if exists
+    task = active_runs.pop(run_id, None)
+    if task and not task.done():
+        task.cancel()
+
+    # 204 No Content
+    return
+
     try:
         if session is None:
-            # Best-effort: we cannot create a dependency-injected session; skip if not available
-            # Callers in this file pass session where needed (execute_run_async ensures thread status uses session)
+            print(f"[update_run_status] no session provided; skipping update run_id={run_id} status={status}")
             return
         values = {"status": status, "updated_at": datetime.utcnow()}
         if output is not None:
             values["output"] = output
         if error is not None:
             values["error_message"] = error
-        await session.execute(update(RunORM).where(RunORM.run_id == run_id).values(**values))
+        print(f"[update_run_status] updating DB run_id={run_id} keys={list(values.keys())}")
+        await session.execute(update(RunORM).where(RunORM.run_id == str(run_id)).values(**values))
         await session.commit()
+        print(f"[update_run_status] commit done run_id={run_id}")
     finally:
         # Do not close the session; lifecycle managed by FastAPI DI
         pass

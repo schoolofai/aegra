@@ -26,7 +26,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 
@@ -41,8 +41,9 @@ class Assistant(Base):
         UniqueConstraint('user_id', 'graph_id', name='assistant_user_graph_unique'),
     )
 
-    assistant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
+    # TEXT PK with DB-side generation using uuid_generate_v4()::text
+    assistant_id: Mapped[str] = mapped_column(
+        Text, primary_key=True, server_default=text("uuid_generate_v4()::text")
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -62,7 +63,8 @@ class Thread(Base):
 
     thread_id: Mapped[str] = mapped_column(Text, primary_key=True)
     status: Mapped[str] = mapped_column(Text, server_default=text("'idle'"))
-    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, server_default=text("'{}'::jsonb"))
+    # Database column is 'metadata_json' (per database.py). ORM attribute 'metadata_json' must map to that column.
+    metadata_json: Mapped[dict] = mapped_column("metadata_json", JSONB, server_default=text("'{}'::jsonb"))
     user_id: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("now()")
@@ -75,10 +77,10 @@ class Thread(Base):
 class Run(Base):
     __tablename__ = "runs"
 
-    # Use UUIDs in the ORM to match database UUID columns and enable proper binding
-    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    # TEXT PK with DB-side generation using uuid_generate_v4()::text
+    run_id: Mapped[str] = mapped_column(Text, primary_key=True, server_default=text("uuid_generate_v4()::text"))
     thread_id: Mapped[str] = mapped_column(Text, ForeignKey("thread.thread_id"), nullable=False)
-    assistant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("assistant.assistant_id"))
+    assistant_id: Mapped[str | None] = mapped_column(Text, ForeignKey("assistant.assistant_id"))
     status: Mapped[str] = mapped_column(Text, server_default=text("'pending'"))
     input: Mapped[dict | None] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
     # Some environments may not yet have a 'config' column; make it nullable without default to match existing DB.

@@ -48,10 +48,13 @@ class DatabaseManager:
     async def _create_metadata_tables(self):
         """Create Agent Protocol metadata tables"""
         async with self.engine.begin() as conn:
+            # Ensure required extension for UUID generation-as-text BEFORE using uuid_generate_v4()
+            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
+
             # Create tables one by one (asyncpg doesn't support multiple statements)
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS assistant (
-                    assistant_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    assistant_id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
                     name TEXT NOT NULL,
                     description TEXT,
                     graph_id TEXT NOT NULL,
@@ -64,9 +67,9 @@ class DatabaseManager:
             
             await conn.execute(text("""
                 CREATE TABLE IF NOT EXISTS runs (
-                    run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                    run_id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
                     thread_id TEXT NOT NULL,
-                    assistant_id UUID REFERENCES assistant(assistant_id),
+                    assistant_id TEXT REFERENCES assistant(assistant_id),
                     status TEXT DEFAULT 'pending',
                     input JSONB,
                     config JSONB,
@@ -82,13 +85,13 @@ class DatabaseManager:
                 CREATE TABLE IF NOT EXISTS thread (
                     thread_id TEXT PRIMARY KEY,
                     status TEXT DEFAULT 'idle',
-                    metadata JSONB DEFAULT '{}',
+                    metadata_json JSONB DEFAULT '{}',
                     user_id TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT NOW(),
                     updated_at TIMESTAMP DEFAULT NOW()
                 )
             """))
-            
+
             # Create indexes
             await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_assistant_user_graph ON assistant(user_id, graph_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_assistant_user ON assistant(user_id)"))
