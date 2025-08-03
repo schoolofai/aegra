@@ -4,7 +4,7 @@
 
 An open-source, production-ready backend for running, persisting, and streaming AI agents with LangGraph compatibility. Built with FastAPI and PostgreSQL for developers who demand control over their agent orchestration.
 
-Based on the [Agent Protocol specification](https://github.com/langchain-ai/agent-protocol) for framework-agnostic agent APIs.
+Based on the [Agent Protocol specification](https://github.com/langchain-ai/agent-protocol), with modifications to maintain backward compatibility with the LangGraph Client SDK.
 
 ## ✨ Why This Exists
 
