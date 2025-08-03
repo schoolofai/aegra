@@ -26,6 +26,8 @@ _runs_db = {}
 # Global task registry for run management
 active_runs: Dict[str, asyncio.Task] = {}
 
+# Default stream modes for background run execution
+RUN_STREAM_MODES = ["messages", "values", "custom"]
 
 async def set_thread_status(session: AsyncSession, thread_id: str, status: str):
     """Update the status column of a thread."""
@@ -52,8 +54,6 @@ async def update_thread_metadata(session: AsyncSession, thread_id: str, assistan
     )
     await session.commit()
 
-# Default stream modes for background run execution
-RUN_STREAM_MODES = ["messages", "values", "custom"]
 
 
 @router.post("/threads/{thread_id}/runs", response_model=Run)
@@ -351,6 +351,15 @@ async def execute_run_async(
 ):
     """Execute run asynchronously in background using streaming to capture all events"""
     from ..services.streaming_service import streaming_service
+
+    # Normalize stream_mode once here for all callers/endpoints.
+    # Accept "messages-tuple" as an alias of "messages".
+    def _normalize_mode(mode):
+        return "messages" if isinstance(mode, str) and mode == "messages-tuple" else mode
+    if isinstance(stream_mode, list):
+        stream_mode = [_normalize_mode(m) for m in stream_mode]
+    else:
+        stream_mode = _normalize_mode(stream_mode)
     
     try:
         # Update status

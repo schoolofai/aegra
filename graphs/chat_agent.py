@@ -32,9 +32,8 @@ async def call_llm(state: ChatState, config: RunnableConfig | None = None) -> Ch
     llm = ChatOpenAI(
         model="gpt-4o-mini",
         temperature=0.7,
-        api_key=os.getenv("OPENAI_API_KEY"),
-        config=config["configurable"],
-    )
+        api_key=os.getenv("OPENAI_API_KEY"),    
+        )
     
     # Get the messages from state
     messages = state["messages"]

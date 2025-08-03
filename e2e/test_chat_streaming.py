@@ -1,0 +1,68 @@
+import pytest
+from e2e._utils import get_e2e_client, elog
+
+
+@pytest.mark.e2e
+@pytest.mark.asyncio
+async def test_chat_streaming_e2e():
+    """
+    End-to-end test for streaming a run via SDK.
+    Consumes SSE until completion and validates end-of-stream behavior.
+    """
+    client = get_e2e_client()
+
+    # Ensure assistant exists
+    assistant = await client.assistants.create(
+        graph_id="chat_agent",
+        config={"tags": ["chat", "stream"]},
+        if_exists="do_nothing",
+    )
+    elog("Assistant.create", assistant)
+    assert "assistant_id" in assistant
+
+    # Create thread
+    thread = await client.threads.create()
+    elog("Threads.create", thread)
+    thread_id = thread["thread_id"]
+
+    # Start streaming (messages mode for token streaming)
+    # Use a longer, content-rich prompt to encourage tokenized streaming (matching standalone script semantics)
+    prompt = ("tell me a very short joke")
+    
+    stream = client.runs.stream(
+        thread_id=thread_id,
+        assistant_id=assistant["assistant_id"],
+        input={"messages": [{"role": "user", "content": prompt}]},
+        stream_mode=["messages-tuple", "values"],
+    )
+
+    # Consume events in messages mode and REQUIRE at least one token and a completion marker.
+    event_count = 0
+    token_count = 0
+    completed = False
+    async for chunk in stream:
+        event_count += 1
+        elog("Runs.stream event", {"event": getattr(chunk, "event", None), "data": getattr(chunk, "data", None)})
+
+        if getattr(chunk, "event", None) == "messages":
+            data = getattr(chunk, "data", None)
+            if isinstance(data, list) and len(data) >= 1:
+                message_chunk = data[0]
+                # message_chunk can be a pydantic object or plain dict
+                content = getattr(message_chunk, "content", None)
+                if content is None and isinstance(message_chunk, dict):
+                    content = message_chunk.get("content")
+                if content:
+                    token_count += 1
+
+        if getattr(chunk, "event", None) == "end":
+            completed = True
+            break
+
+    # Enforce "real" streaming behavior: at least one token and an end marker
+    assert event_count > 0, "Expected at least one event from streaming run"
+    assert token_count >= 1, (
+        "Expected at least one token in messages stream (server returned none). "
+        "Ensure OPENAI_API_KEY is set and the server uses a streaming-capable model."
+    )
+    assert completed, "Did not observe explicit 'end' event in stream"
