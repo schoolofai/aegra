@@ -1,6 +1,6 @@
 # Agent Protocol Server
 
-> **Replace LangGraph Cloud with your own backend – zero vendor lock-in, full control.**
+> **Replace LangGraph Platform with your own backend – zero vendor lock-in, full control.**
 
 An open-source, production-ready backend for running, persisting, and streaming AI agents with LangGraph compatibility. Built with FastAPI and PostgreSQL for developers who demand control over their agent orchestration.
 
