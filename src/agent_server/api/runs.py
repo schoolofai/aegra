@@ -4,6 +4,7 @@ from uuid import uuid4
 from datetime import datetime
 from typing import Dict, Optional
 from fastapi import APIRouter, HTTPException, Depends, Header, Query
+import logging
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.orm import Assistant as AssistantORM, Thread as ThreadORM, get_session
@@ -15,6 +16,8 @@ from ..core.sse import get_sse_headers
 from ..services.langgraph_service import get_langgraph_service
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+# TODO: Replace all print statements and bare exceptions with structured logging across the codebase
 
 
 # Simple in-memory storage for now
@@ -187,6 +190,7 @@ async def get_run(thread_id: str, run_id: str, user: User = Depends(get_current_
     if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
+    logger.debug("get_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run.status)
     return run
 
 
@@ -195,6 +199,7 @@ async def list_runs(thread_id: str, user: User = Depends(get_current_user)):
     """List runs for a specific thread"""
     user_runs = [r for r in _runs_db.values() 
                  if r.user_id == user.identity and r.thread_id == thread_id]
+    logger.debug("list_runs: user=%s thread_id=%s total=%d", user.identity, thread_id, len(user_runs))
     return RunList(
         runs=user_runs,
         total=len(user_runs)
@@ -220,8 +225,10 @@ async def update_run(
     from ..services.streaming_service import streaming_service
     
     if request.status == "cancelled":
+        logger.info("update_run: cancelling run_id=%s user=%s thread_id=%s", run_id, user.identity, thread_id)
         await streaming_service.cancel_run(run_id)
     elif request.status == "interrupted":
+        logger.info("update_run: interrupting run_id=%s user=%s thread_id=%s", run_id, user.identity, thread_id)
         await streaming_service.interrupt_run(run_id)
     
     # Return final run state  
@@ -239,6 +246,7 @@ async def join_run(thread_id: str, run_id: str, user: User = Depends(get_current
     if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
+    logger.debug("join_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run.status)
     # Wait for completion if not finished
     if run.status not in ["completed", "failed", "cancelled"]:
         task = active_runs.get(run_id)
@@ -272,6 +280,7 @@ async def stream_run(
     if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
+    logger.debug("stream_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run.status)
     # Check if run is streamable
     if run.status in ["completed", "failed", "cancelled"]:
         # Return final state for completed runs using new event format
@@ -315,6 +324,7 @@ async def delete_run(thread_id: str, run_id: str, user: User = Depends(get_curre
     if run.user_id != user.identity or run.thread_id != thread_id:
         raise HTTPException(404, f"Run '{run_id}' not found")
     
+    logger.info("delete_run: user=%s thread_id=%s run_id=%s status=%s", user.identity, thread_id, run_id, run.status)
     # Cancel the run if it's still active
     if run.status in ["pending", "running", "streaming"]:
         from ..services.streaming_service import streaming_service
@@ -345,6 +355,7 @@ async def execute_run_async(
     try:
         # Update status
         await update_run_status(run_id, "running")
+        logger.info("execute_run_async: started run_id=%s thread_id=%s", run_id, thread_id)
         
         # Get graph and execute
         langgraph_service = get_langgraph_service()
@@ -374,6 +385,7 @@ async def execute_run_async(
                 await streaming_service.store_event_from_raw(run_id, event_id, raw_event)
             
                 # Track final output
+                logger.debug("execute_run_async: event_id=%s run_id=%s", event_id, run_id)
                 if isinstance(raw_event, tuple):
                     if len(raw_event) >= 2 and raw_event[0] == "values":
                         final_output = raw_event[1]
@@ -391,6 +403,7 @@ async def execute_run_async(
         
         # Update with results
         await update_run_status(run_id, "completed", output=final_output)
+        logger.info("execute_run_async: completed run_id=%s thread_id=%s", run_id, thread_id)
         # Mark thread back to idle
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
@@ -401,6 +414,7 @@ async def execute_run_async(
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
+        logger.info("execute_run_async: cancelled run_id=%s thread_id=%s", run_id, thread_id)
         # Signal cancellation to broker
         await streaming_service.signal_run_cancelled(run_id)
         raise
@@ -409,6 +423,7 @@ async def execute_run_async(
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
+        logger.exception("execute_run_async: failed run_id=%s thread_id=%s error=%s", run_id, thread_id, str(e))
         # Signal error to broker
         await streaming_service.signal_run_error(run_id, str(e))
         raise
@@ -416,6 +431,7 @@ async def execute_run_async(
         # Clean up broker
         await streaming_service.cleanup_run(run_id)
         active_runs.pop(run_id, None)
+        logger.debug("execute_run_async: cleaned up run_id=%s", run_id)
 
 
 async def update_run_status(run_id: str, status: str, output=None, error: str = None):

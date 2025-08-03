@@ -1,7 +1,7 @@
 """Agent Protocol Pydantic models"""
 
 from .assistants import Assistant, AssistantCreate, AssistantList, AssistantSearchRequest, AssistantSearchResponse, AgentSchemas
-from .threads import Thread, ThreadCreate, ThreadList, ThreadSearchRequest, ThreadSearchResponse
+from .threads import Thread, ThreadCreate, ThreadList, ThreadSearchRequest, ThreadSearchResponse, ThreadState, ThreadCheckpoint, ThreadHistoryRequest
 from .runs import Run, RunCreate, RunList, RunStatus
 from .store import StorePutRequest, StoreGetResponse, StoreSearchRequest, StoreSearchResponse, StoreItem
 from .errors import AgentProtocolError, get_error_type
@@ -11,7 +11,7 @@ __all__ = [
     # Assistants
     "Assistant", "AssistantCreate", "AssistantList", "AssistantSearchRequest", "AssistantSearchResponse", "AgentSchemas",
     # Threads  
-    "Thread", "ThreadCreate", "ThreadList", "ThreadSearchRequest", "ThreadSearchResponse",
+    "Thread", "ThreadCreate", "ThreadList", "ThreadSearchRequest", "ThreadSearchResponse", "ThreadState", "ThreadCheckpoint", "ThreadHistoryRequest",
     # Runs
     "Run", "RunCreate", "RunList", "RunStatus",
     # Store

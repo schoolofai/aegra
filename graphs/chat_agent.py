@@ -28,17 +28,12 @@ async def call_llm(state: ChatState, config: RunnableConfig | None = None) -> Ch
     ``config`` to prove the server’s pass-through behaviour.
     """
 
-    if config is not None:
-        dbg_meta = config.get("metadata", {})
-        dbg_cfg  = config.get("configurable", {})
-        print("🔧 call_llm received config metadata:", dbg_meta)
-        print("🔧 call_llm received configurable keys:", dbg_cfg.keys())
-
     # Initialize OpenAI LLM
     llm = ChatOpenAI(
         model="gpt-4o-mini",
         temperature=0.7,
         api_key=os.getenv("OPENAI_API_KEY"),
+        config=config["configurable"],
     )
     
     # Get the messages from state

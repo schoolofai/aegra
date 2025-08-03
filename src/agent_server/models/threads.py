@@ -43,3 +43,33 @@ class ThreadSearchResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ThreadCheckpoint(BaseModel):
+    """Checkpoint identifier for thread history - matches competitor format"""
+    checkpoint_id: Optional[str] = None
+    thread_id: Optional[str] = None
+    checkpoint_ns: Optional[str] = ""
+
+
+class ThreadState(BaseModel):
+    """Thread state model for history endpoint - matches competitor format"""
+    values: Dict[str, Any] = Field(description="Channel values (messages, etc.)")
+    next: List[str] = Field(default_factory=list, description="Next nodes to execute")
+    tasks: List[Dict[str, Any]] = Field(default_factory=list, description="Tasks to execute")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Checkpoint metadata")
+    created_at: Optional[datetime] = Field(None, description="Timestamp of state creation")
+    checkpoint: ThreadCheckpoint = Field(description="Current checkpoint")
+    parent_checkpoint: Optional[ThreadCheckpoint] = Field(None, description="Parent checkpoint")
+    checkpoint_id: Optional[str] = Field(None, description="Checkpoint ID (for backward compatibility)")
+    parent_checkpoint_id: Optional[str] = Field(None, description="Parent checkpoint ID (for backward compatibility)")
+
+
+class ThreadHistoryRequest(BaseModel):
+    """Request model for thread history endpoint"""
+    limit: Optional[int] = Field(10, ge=1, le=100, description="Number of states to return")
+    before: Optional[str] = Field(None, description="Return states before this checkpoint ID")
+    metadata: Optional[Dict[str, Any]] = Field(None, description="Filter by metadata")
+    checkpoint: Optional[Dict[str, Any]] = Field(None, description="Checkpoint for subgraph filtering")
+    subgraphs: Optional[bool] = Field(False, description="Include states from subgraphs")
+    checkpoint_ns: Optional[str] = Field(None, description="Checkpoint namespace")
