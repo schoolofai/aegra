@@ -69,11 +69,12 @@ class DatabaseManager:
                     assistant_id UUID REFERENCES assistant(assistant_id),
                     status TEXT DEFAULT 'pending',
                     input JSONB,
+                    config JSONB,
                     output JSONB,
-                    error TEXT,
+                    error_message TEXT,
                     user_id TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    completed_at TIMESTAMP
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
                 )
             """))
             
@@ -93,6 +94,9 @@ class DatabaseManager:
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_assistant_user ON assistant(user_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_thread_id ON runs(thread_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_user ON runs(user_id)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_assistant_id ON runs(assistant_id)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_thread_user ON thread(user_id)"))
     
     async def close(self):

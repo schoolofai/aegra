@@ -42,7 +42,7 @@ class Assistant(Base):
     )
 
     assistant_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
+        UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()")
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text)
@@ -75,22 +75,24 @@ class Thread(Base):
 class Run(Base):
     __tablename__ = "runs"
 
-    run_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
-    )
-    thread_id: Mapped[str] = mapped_column(Text, ForeignKey("thread.thread_id"))
-    assistant_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("assistant.assistant_id")
-    )
+    # Use UUIDs in the ORM to match database UUID columns and enable proper binding
+    run_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
+    thread_id: Mapped[str] = mapped_column(Text, ForeignKey("thread.thread_id"), nullable=False)
+    assistant_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("assistant.assistant_id"))
     status: Mapped[str] = mapped_column(Text, server_default=text("'pending'"))
-    input: Mapped[dict | None] = mapped_column(JSONB)
+    input: Mapped[dict | None] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+    # Some environments may not yet have a 'config' column; make it nullable without default to match existing DB.
+    # If migrations add this column later, it's already represented here.
+    config: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     output: Mapped[dict | None] = mapped_column(JSONB)
-    error: Mapped[str | None] = mapped_column(Text)
+    error_message: Mapped[str | None] = mapped_column(Text)
     user_id: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("now()")
     )
-    completed_at: Mapped[datetime | None] = mapped_column(TIMESTAMP(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
+    )
 
 
 # ---------------------------------------------------------------------------
