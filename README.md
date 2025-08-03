@@ -6,6 +6,8 @@ An open-source, production-ready backend for running, persisting, and streaming 
 
 Based on the [Agent Protocol specification](https://github.com/langchain-ai/agent-protocol), with modifications to maintain backward compatibility with the LangGraph Client SDK.
 
+**Status**: Work in progress — actively improving DX, protocol coverage, and production hardening. Contributors welcome!
+
 ## ✨ Why This Exists
 
 - **Zero Vendor Lock-in**: Own your agent infrastructure completely
