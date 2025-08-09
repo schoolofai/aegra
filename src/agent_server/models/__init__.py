@@ -3,7 +3,14 @@
 from .assistants import Assistant, AssistantCreate, AssistantList, AssistantSearchRequest, AssistantSearchResponse, AgentSchemas
 from .threads import Thread, ThreadCreate, ThreadList, ThreadSearchRequest, ThreadSearchResponse, ThreadState, ThreadCheckpoint, ThreadHistoryRequest
 from .runs import Run, RunCreate, RunList, RunStatus
-from .store import StorePutRequest, StoreGetResponse, StoreSearchRequest, StoreSearchResponse, StoreItem
+from .store import (
+    StorePutRequest,
+    StoreGetResponse,
+    StoreSearchRequest,
+    StoreSearchResponse,
+    StoreItem,
+    StoreDeleteRequest,
+)
 from .errors import AgentProtocolError, get_error_type
 from .auth import User, AuthContext, TokenPayload
 
@@ -15,7 +22,7 @@ __all__ = [
     # Runs
     "Run", "RunCreate", "RunList", "RunStatus",
     # Store
-    "StorePutRequest", "StoreGetResponse", "StoreSearchRequest", "StoreSearchResponse", "StoreItem",
+    "StorePutRequest", "StoreGetResponse", "StoreSearchRequest", "StoreSearchResponse", "StoreItem", "StoreDeleteRequest",
     # Errors
     "AgentProtocolError", "get_error_type",
     # Auth

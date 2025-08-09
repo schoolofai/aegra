@@ -38,3 +38,9 @@ class StoreSearchResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class StoreDeleteRequest(BaseModel):
+    """Request body for deleting store items (SDK-compatible)."""
+    namespace: List[str]
+    key: str
