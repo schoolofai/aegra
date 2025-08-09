@@ -231,13 +231,11 @@ class StreamingService:
             return False
     
     async def _update_run_status(self, run_id: str, status: str, output: Any = None, error: str = None):
-        """Update run status in database"""
+        """Update run status in database using the shared updater."""
         try:
-            # Import here to avoid circular imports
-            from ..api.runs import _runs_db, update_run_status
-            
-            if run_id in _runs_db:
-                await update_run_status(run_id, status, output, error)
+            # Lazy import to avoid cycles
+            from ..api.runs import update_run_status
+            await update_run_status(run_id, status, output, error)
         except Exception as e:
             logger.error(f"Error updating run status for {run_id}: {e}")
     

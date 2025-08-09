@@ -619,15 +619,28 @@ async def update_run_status(
     session: Optional[AsyncSession] = None,
 ):
     """Update run status in database (persisted). If session not provided, opens a short-lived session."""
-    from ..core.orm import Run as RunORM, get_session as _get_session
+    from ..core.orm import Run as RunORM
+    from ..core.orm import _get_session_maker  # use internal session factory when out of request context
 
-    # If no session was passed, open a temporary one
     owns_session = False
     if session is None:
-        # FastAPI dependency cannot be awaited here; use db_manager or engine via get_session
-        # Fallback: try to acquire a new session from get_session() if it is callable that returns sessionmaker.
-        # Here we assume update within the current session context where possible.
-        pass
+        maker = _get_session_maker()
+        session = maker()  # type: ignore[assignment]
+        owns_session = True
+    try:
+        values = {"status": status, "updated_at": datetime.utcnow()}
+        if output is not None:
+            values["output"] = output
+        if error is not None:
+            values["error_message"] = error
+        print(f"[update_run_status] updating DB run_id={run_id} keys={list(values.keys())}")
+        await session.execute(update(RunORM).where(RunORM.run_id == str(run_id)).values(**values))  # type: ignore[arg-type]
+        await session.commit()
+        print(f"[update_run_status] commit done run_id={run_id}")
+    finally:
+        # Close only if we created it here
+        if owns_session:
+            await session.close()  # type: ignore[func-returns-value]
 
 
 @router.delete("/threads/{thread_id}/runs/{run_id}", status_code=204)
@@ -697,20 +710,3 @@ async def delete_run(
 
     # 204 No Content
     return
-
-    try:
-        if session is None:
-            print(f"[update_run_status] no session provided; skipping update run_id={run_id} status={status}")
-            return
-        values = {"status": status, "updated_at": datetime.utcnow()}
-        if output is not None:
-            values["output"] = output
-        if error is not None:
-            values["error_message"] = error
-        print(f"[update_run_status] updating DB run_id={run_id} keys={list(values.keys())}")
-        await session.execute(update(RunORM).where(RunORM.run_id == str(run_id)).values(**values))
-        await session.commit()
-        print(f"[update_run_status] commit done run_id={run_id}")
-    finally:
-        # Do not close the session; lifecycle managed by FastAPI DI
-        pass
