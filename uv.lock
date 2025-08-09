@@ -750,7 +750,7 @@ wheels = [
 ]
 
 [[package]]
-name = "langgraph-agent-server"
+name = "agent-protocol-server"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

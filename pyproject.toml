@@ -1,7 +1,7 @@
 [project]
-name = "langgraph-agent-server"
+name = "agent-protocol-server"
 version = "0.1.0"
-description = "Add your description here"
+description = "Agent Protocol Server"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

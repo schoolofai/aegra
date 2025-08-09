@@ -1,5 +1,5 @@
 def main():
-    print("Hello from langgraph-agent-server!")
+    print("Hello from agent-protocol-server!")
 
 
 if __name__ == "__main__":

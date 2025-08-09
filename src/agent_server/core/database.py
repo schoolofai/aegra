@@ -19,7 +19,7 @@ class DatabaseManager:
         self._store_cm = None
         self._database_url = os.getenv(
             "DATABASE_URL", 
-            "postgresql+asyncpg://user:password@localhost:5432/langgraph_agent_server"
+            "postgresql+asyncpg://user:password@localhost:5432/agent_protocol_server"
         )
     
     async def initialize(self):

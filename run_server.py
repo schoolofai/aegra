@@ -18,7 +18,7 @@ def setup_environment():
     """Set up environment variables for testing"""
     # Set database URL for development
     if not os.getenv("DATABASE_URL"):
-        os.environ["DATABASE_URL"] = "postgresql+asyncpg://user:password@localhost:5432/langgraph_agent_server"
+        os.environ["DATABASE_URL"] = "postgresql+asyncpg://user:password@localhost:5432/agent_protocol_server"
     
     # Set auth type (can be overridden)
     if not os.getenv("AUTH_TYPE"):
@@ -44,7 +44,7 @@ def configure_logging(level: str = "DEBUG"):
     # Ensure our package/module loggers are at least at the configured level
     logging.getLogger("agent_server").setLevel(log_level)
     logging.getLogger("src.agent_server").setLevel(log_level)
-    logging.getLogger("langgraph_agent_server").setLevel(log_level)
+    logging.getLogger("agent_protocol_server").setLevel(log_level)
     logging.getLogger("uvicorn.error").setLevel(log_level)
     logging.getLogger("uvicorn.access").setLevel(log_level)
 
@@ -63,7 +63,7 @@ def main():
         "src.agent_server.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=False,
+        reload=True,
         log_level=os.getenv("UVICORN_LOG_LEVEL", "debug"),
     )
 

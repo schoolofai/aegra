@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   # PostgreSQL database for LangGraph and metadata
@@ -7,13 +7,13 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: langgraph_agent_server
+      POSTGRES_DB: agent_protocol_server
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d langgraph_agent_server"]
+      test: ["CMD-SHELL", "pg_isready -U user -d agent_protocol_server"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,7 +26,7 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/langgraph_agent_server
+      - DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/agent_protocol_server
       - AUTH_TYPE=noop
       - DEBUG=true
     depends_on:

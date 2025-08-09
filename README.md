@@ -29,7 +29,7 @@ Based on the [Agent Protocol specification](https://github.com/langchain-ai/agen
 ```bash
 # Clone and setup
 git clone <repository-url>
-cd langgraph-agent-server
+cd agent-protocol-server
 uv install
 
 # Start database
@@ -63,7 +63,7 @@ Client → FastAPI → LangGraph SDK → PostgreSQL
 ## 📁 Project Structure
 
 ```
-langgraph-agent-server/
+agent-protocol-server/
 ├── langgraph.json              # Graph configuration
 ├── auth.py                     # Authentication setup
 ├── graphs/                     # Agent definitions
@@ -83,10 +83,10 @@ langgraph-agent-server/
 
 ```bash
 # Database
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/langgraph_agent_server
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/agent_protocol_server
 
 # Authentication
-AUTH_TYPE=noop  # noop, jwt, oauth, custom
+AUTH_TYPE=noop  # noop, custom
 
 # Server
 HOST=0.0.0.0
