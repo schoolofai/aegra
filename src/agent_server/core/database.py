@@ -92,6 +92,18 @@ class DatabaseManager:
                 )
             """))
 
+            # Events table for SSE replay persistence
+            await conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS run_events (
+                    id TEXT PRIMARY KEY,
+                    run_id TEXT NOT NULL,
+                    seq INTEGER NOT NULL,
+                    event TEXT NOT NULL,
+                    data JSONB,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+                )
+            """))
+
             # Create indexes
             await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_assistant_user_graph ON assistant(user_id, graph_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_assistant_user ON assistant(user_id)"))
@@ -101,6 +113,7 @@ class DatabaseManager:
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_assistant_id ON runs(assistant_id)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at)"))
             await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_thread_user ON thread(user_id)"))
+            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_run_events_run_seq ON run_events(run_id, seq)"))
     
     async def close(self):
         """Close database connections"""

@@ -1,123 +1,147 @@
-"""Event store for SSE replay functionality"""
+"""Persistent event store for SSE replay functionality (Postgres-backed)."""
 import asyncio
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 
-from ..core.sse import SSEEvent
+from sqlalchemy import text, bindparam
+from sqlalchemy.dialects.postgresql import JSONB
+
+from ..core.sse import SSEEvent, _serialize_message_object
+import json
+from ..core.database import db_manager
 
 
 class EventStore:
-    """In-memory event store for SSE replay functionality"""
-    
-    # Maximum events to store per run (prevent memory leaks)
-    MAX_EVENTS_PER_RUN = 1000
-    
-    # Event cleanup interval in seconds
-    CLEANUP_INTERVAL = 300  # 5 minutes
-    
-    def __init__(self):
-        self.events: Dict[str, List[SSEEvent]] = {}
-        self.run_timestamps: Dict[str, datetime] = {}
+    """Postgres-backed event store for SSE replay functionality"""
+
+    CLEANUP_INTERVAL = 300  # seconds
+
+    def __init__(self) -> None:
         self._cleanup_task: Optional[asyncio.Task] = None
-        self._lock = asyncio.Lock()
-    
-    async def start_cleanup_task(self):
-        """Start background cleanup task"""
+
+    async def start_cleanup_task(self) -> None:
         if self._cleanup_task is None or self._cleanup_task.done():
             self._cleanup_task = asyncio.create_task(self._cleanup_loop())
-    
-    async def stop_cleanup_task(self):
-        """Stop background cleanup task"""
+
+    async def stop_cleanup_task(self) -> None:
         if self._cleanup_task and not self._cleanup_task.done():
             self._cleanup_task.cancel()
             try:
                 await self._cleanup_task
             except asyncio.CancelledError:
                 pass
-    
-    async def store_event(self, run_id: str, event: SSEEvent):
-        """Store event for potential replay"""
-        async with self._lock:
-            if run_id not in self.events:
-                self.events[run_id] = []
-                self.run_timestamps[run_id] = datetime.utcnow()
-            
-            self.events[run_id].append(event)
-            
-            # Limit event history per run
-            if len(self.events[run_id]) > self.MAX_EVENTS_PER_RUN:
-                self.events[run_id] = self.events[run_id][-self.MAX_EVENTS_PER_RUN:]
-    
+
+    async def store_event(self, run_id: str, event: SSEEvent) -> None:
+        """Persist an event with sequence extracted from id suffix.
+
+        We expect event.id format: f"{run_id}_event_{seq}".
+        """
+        try:
+            seq = int(str(event.id).split("_event_")[-1])
+        except Exception:
+            seq = 0
+        engine = db_manager.get_engine()
+        async with engine.begin() as conn:
+            stmt = text(
+                """
+                INSERT INTO run_events (id, run_id, seq, event, data, created_at)
+                VALUES (:id, :run_id, :seq, :event, :data, NOW())
+                ON CONFLICT (id) DO NOTHING
+                """
+            ).bindparams(bindparam("data", type_=JSONB))
+            await conn.execute(
+                stmt,
+                {
+                    "id": event.id,
+                    "run_id": run_id,
+                    "seq": seq,
+                    "event": event.event,
+                    "data": event.data,
+                },
+            )
+
     async def get_events_since(self, run_id: str, last_event_id: str) -> List[SSEEvent]:
-        """Get events that occurred after last_event_id"""
-        async with self._lock:
-            events = self.events.get(run_id, [])
-            
-            if not events:
-                return []
-            
-            # Find the last event index by exact ID match first
-            last_index = -1
-            for i, event in enumerate(events):
-                if event.id == last_event_id:
-                    last_index = i
-                    break
-            
-            #TODO: Remove this after stable release.
-            # This is a hack to support mock event IDs for testing because we don't get event_id data on client sdk streamed chunks.
-            # If exact match not found, try sequence-based lookup for mock IDs
-            if last_index == -1:
-                try:
-                    # Extract sequence number from the provided event_id (e.g., mock_event_8 -> 8)
-                    target_sequence = int(last_event_id.split("_event_")[-1])
-                    
-                    # Find the last stored event with sequence <= target_sequence
-                    for i, event in enumerate(events):
-                        try:
-                            event_sequence = int(event.id.split("_event_")[-1])
-                            if event_sequence == target_sequence:
-                                last_index = i
-                                break
-                        except (ValueError, IndexError):
-                            continue
-                except (ValueError, IndexError):
-                    # If we can't parse the sequence, return all events (fallback behavior)
-                    pass
-            
-            # Return events after the last received event
-            return events[last_index + 1:] if last_index >= 0 else events
-    
+        """Fetch all events for run after last_event_id sequence."""
+        try:
+            last_seq = int(str(last_event_id).split("_event_")[-1])
+        except Exception:
+            last_seq = -1
+        engine = db_manager.get_engine()
+        async with engine.begin() as conn:
+            rs = await conn.execute(
+                text(
+                    """
+                    SELECT id, event, data, created_at
+                    FROM run_events
+                    WHERE run_id = :run_id AND seq > :last_seq
+                    ORDER BY seq ASC
+                    """
+                ),
+                {"run_id": run_id, "last_seq": last_seq},
+            )
+            rows = rs.fetchall()
+        return [SSEEvent(id=r.id, event=r.event, data=r.data, timestamp=r.created_at) for r in rows]
+
     async def get_all_events(self, run_id: str) -> List[SSEEvent]:
-        """Get all events for a run"""
-        async with self._lock:
-            return self.events.get(run_id, []).copy()
-    
-    async def cleanup_events(self, run_id: str):
-        """Clean up events after run completion"""
-        async with self._lock:
-            self.events.pop(run_id, None)
-            self.run_timestamps.pop(run_id, None)
-    
+        engine = db_manager.get_engine()
+        async with engine.begin() as conn:
+            rs = await conn.execute(
+                text(
+                    """
+                    SELECT id, event, data, created_at
+                    FROM run_events
+                    WHERE run_id = :run_id
+                    ORDER BY seq ASC
+                    """
+                ),
+                {"run_id": run_id},
+            )
+            rows = rs.fetchall()
+        return [SSEEvent(id=r.id, event=r.event, data=r.data, timestamp=r.created_at) for r in rows]
+
+    async def cleanup_events(self, run_id: str) -> None:
+        engine = db_manager.get_engine()
+        async with engine.begin() as conn:
+            await conn.execute(text("DELETE FROM run_events WHERE run_id = :run_id"), {"run_id": run_id})
+
     async def get_run_info(self, run_id: str) -> Optional[Dict]:
-        """Get basic run info from stored events"""
-        async with self._lock:
-            events = self.events.get(run_id, [])
-            if not events:
+        engine = db_manager.get_engine()
+        async with engine.begin() as conn:
+            rs = await conn.execute(
+                text(
+                    """
+                    SELECT MIN(seq) AS first_seq, MAX(seq) AS last_seq
+                    FROM run_events
+                    WHERE run_id = :run_id
+                    """
+                ),
+                {"run_id": run_id},
+            )
+            row = rs.fetchone()
+            if not row or row.last_seq is None:
                 return None
-            
-            first_event = events[0]
-            last_event = events[-1]
-            
-            return {
-                "run_id": run_id,
-                "event_count": len(events),
-                "first_event_time": first_event.timestamp,
-                "last_event_time": last_event.timestamp,
-                "last_event_id": last_event.id
-            }
-    
-    async def _cleanup_loop(self):
-        """Background cleanup of old events"""
+            # Fetch last event for id and timestamp
+            rs2 = await conn.execute(
+                text(
+                    """
+                    SELECT id, created_at
+                    FROM run_events
+                    WHERE run_id = :run_id AND seq = :last_seq
+                    LIMIT 1
+                    """
+                ),
+                {"run_id": run_id, "last_seq": row.last_seq},
+            )
+            last = rs2.fetchone()
+        return {
+            "run_id": run_id,
+            "event_count": int(row.last_seq) - int(row.first_seq) + 1 if row.first_seq is not None else 0,
+            "first_event_time": None,
+            "last_event_time": last.created_at if last else None,
+            "last_event_id": last.id if last else None,
+        }
+
+    async def _cleanup_loop(self) -> None:
         while True:
             try:
                 await asyncio.sleep(self.CLEANUP_INTERVAL)
@@ -126,23 +150,16 @@ class EventStore:
                 break
             except Exception as e:
                 print(f"Error in event store cleanup: {e}")
-    
-    async def _cleanup_old_runs(self):
-        """Clean up events for runs older than 1 hour"""
-        cutoff_time = datetime.utcnow() - timedelta(hours=1)
-        
-        async with self._lock:
-            runs_to_cleanup = [
-                run_id for run_id, timestamp in self.run_timestamps.items()
-                if timestamp < cutoff_time
-            ]
-            
-            for run_id in runs_to_cleanup:
-                self.events.pop(run_id, None)
-                self.run_timestamps.pop(run_id, None)
-            
-            if runs_to_cleanup:
-                print(f"Cleaned up events for {len(runs_to_cleanup)} old runs")
+
+    async def _cleanup_old_runs(self) -> None:
+        # Retain events for 1 hour by default
+        engine = db_manager.get_engine()
+        async with engine.begin() as conn:
+            await conn.execute(
+                text(
+                    "DELETE FROM run_events WHERE created_at < NOW() - INTERVAL '1 hour'"
+                )
+            )
 
 
 # Global event store instance
@@ -150,12 +167,12 @@ event_store = EventStore()
 
 
 async def store_sse_event(run_id: str, event_id: str, event_type: str, data: Dict):
-    """Helper function to store SSE event"""
-    event = SSEEvent(
-        id=event_id,
-        event=event_type,
-        data=data,
-        timestamp=datetime.utcnow()
-    )
+    # Ensure JSONB-safe data by serializing complex message objects
+    try:
+        safe_data = json.loads(json.dumps(data, default=_serialize_message_object))
+    except Exception:
+        # Fallback to stringifying as a last resort to avoid crashing the run
+        safe_data = {"raw": str(data)}
+    event = SSEEvent(id=event_id, event=event_type, data=safe_data, timestamp=datetime.utcnow())
     await event_store.store_event(run_id, event)
     return event
