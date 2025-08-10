@@ -42,9 +42,9 @@ async def create_thread(
     metadata = request.metadata or {}
     metadata.update({
         "owner": user.identity,
-        "assistantId": None,  # Will be set when first run is created
-        "graphId": None,       # Will be set when first run is created  
-        "threadName": "",      # User can update this later
+        "assistant_id": None,  # Will be set when first run is created
+        "graph_id": None,       # Will be set when first run is created  
+        "thread_name": "",      # User can update this later
     })
     
     thread_orm = ThreadORM(
@@ -184,7 +184,7 @@ async def get_thread_history_post(
 
         # Extract graph_id from thread metadata
         thread_metadata = thread.metadata_json or {}
-        graph_id = thread_metadata.get("graphId")
+        graph_id = thread_metadata.get("graph_id")
         if not graph_id:
             # Return empty history if no graph is associated yet
             logger.info(f"history POST: no graph_id set for thread {thread_id}")

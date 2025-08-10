@@ -23,7 +23,7 @@ def _thread_row():
         def __init__(self):
             self.thread_id = "11111111-1111-1111-1111-111111111111"
             self.status = "idle"
-            self.metadata_json = {"graphId": "dummy_graph"}
+            self.metadata_json = {"graph_id": "dummy_graph"}
             self.user_id = "test-user"
             self.created_at = None
             self.updated_at = None
