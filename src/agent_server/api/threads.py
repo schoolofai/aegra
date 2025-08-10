@@ -357,7 +357,8 @@ async def search_threads(
 
     offset = request.offset or 0
     limit = request.limit or 20
-    stmt = stmt.offset(offset).limit(limit)
+    # Return latest first
+    stmt = stmt.order_by(ThreadORM.created_at.desc()).offset(offset).limit(limit)
 
     result = await session.scalars(stmt)
     rows = result.all()
