@@ -122,10 +122,8 @@ class StreamingService:
     async def stream_run_execution(
         self, 
         run: Run, 
-        user: User, 
         last_event_id: Optional[str] = None,
-        config: Optional[Dict[str, Any]] = None,
-        stream_mode: Optional[list[str]] = None
+        cancel_on_disconnect: bool = False,
     ) -> AsyncIterator[str]:
         """Stream run execution with unified producer-consumer pattern"""
         run_id = run.run_id
@@ -167,9 +165,18 @@ class StreamingService:
                         last_sent_sequence = current_sequence
                 
         except asyncio.CancelledError:
-            # Handle client disconnect gracefully
             logger.debug(f"Stream cancelled for run {run_id}")
-            pass
+            if cancel_on_disconnect:
+                # Attempt to cancel the background run task as well
+                try:
+                    # Lazy import to avoid cycles
+                    from ..api.runs import active_runs
+                    task = active_runs.get(run_id)
+                    if task and not task.done():
+                        task.cancel()
+                except Exception as e:
+                    logger.warning(f"Failed to cancel background task for run {run_id} on disconnect: {e}")
+            raise
         except Exception as e:
             logger.error(f"Error in stream_run_execution for run {run_id}: {e}")
             yield create_error_event(str(e))

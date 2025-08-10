@@ -250,8 +250,14 @@ async def create_and_stream_run(
     # Stream immediately from broker (which will also include replay of any early events)
     from ..services.streaming_service import streaming_service
 
+    cancel_on_disconnect = (request.on_disconnect or "continue").lower() == "cancel"
+
     return StreamingResponse(
-        streaming_service.stream_run_execution(run, user, None, request.config, stream_mode),
+        streaming_service.stream_run_execution(
+            run,
+            None,
+            cancel_on_disconnect=cancel_on_disconnect,
+        ),
         media_type="text/event-stream",
         headers={
             **get_sse_headers(),
@@ -442,7 +448,7 @@ async def stream_run(
     run_model = Run.model_validate({c.name: getattr(run_orm, c.name) for c in run_orm.__table__.columns})
 
     return StreamingResponse(
-        streaming_service.stream_run_execution(run_model, user, last_event_id, run_model.config, stream_mode),
+        streaming_service.stream_run_execution(run_model, last_event_id, cancel_on_disconnect=False),
         media_type="text/event-stream",
         headers={
             **get_sse_headers(),

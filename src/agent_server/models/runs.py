@@ -15,6 +15,10 @@ class RunCreate(BaseModel):
     )
     stream: bool = Field(False, description="Enable streaming response")
     stream_mode: Optional[str | list[str]] = Field(None, description="Requested stream mode(s) as per LangGraph")
+    on_disconnect: Optional[str] = Field(
+        None,
+        description="Behavior on client disconnect: 'cancel' or 'continue' (default).",
+    )
 
 
 class Run(BaseModel):

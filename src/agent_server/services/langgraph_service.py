@@ -116,7 +116,6 @@ class LangGraphService:
             try:
                 store_cm = await db_manager.get_store()
                 compiled_graph = base_graph.copy(update={"checkpointer": checkpointer_cm, "store": store_cm})
-                print(f"🔧 Wrapped pre-compiled graph '{graph_id}' with Postgres persistence via copy()")
             except Exception:
                 # Fallback: property may be immutably set; run as-is with warning
                 print(f"⚠️  Pre-compiled graph '{graph_id}' does not support checkpointer injection; running without persistence")
