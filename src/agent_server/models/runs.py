@@ -7,7 +7,10 @@ from pydantic import BaseModel, Field
 class RunCreate(BaseModel):
     """Request model for creating runs"""
     assistant_id: str = Field(..., description="Assistant to execute")
-    input: Dict[str, Any] = Field(..., description="Input data for the run")
+    input: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Input data for the run. Optional when resuming from a checkpoint.",
+    )
     config: Optional[Dict[str, Any]] = Field(None, description="LangGraph execution config")
     checkpoint: Optional[Dict[str, Any]] = Field(
         None,
