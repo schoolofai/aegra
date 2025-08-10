@@ -67,7 +67,7 @@ class ThreadState(BaseModel):
 
 class ThreadHistoryRequest(BaseModel):
     """Request model for thread history endpoint"""
-    limit: Optional[int] = Field(10, ge=1, le=100, description="Number of states to return")
+    limit: Optional[int] = Field(10, ge=1, le=1000, description="Number of states to return")
     before: Optional[str] = Field(None, description="Return states before this checkpoint ID")
     metadata: Optional[Dict[str, Any]] = Field(None, description="Filter by metadata")
     checkpoint: Optional[Dict[str, Any]] = Field(None, description="Checkpoint for subgraph filtering")

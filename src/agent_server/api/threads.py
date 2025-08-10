@@ -111,12 +111,13 @@ async def list_threads(
     """List user's threads"""
     stmt = select(ThreadORM).where(ThreadORM.user_id == user.identity)
     result = await session.scalars(stmt)
+    rows = result.all()
     user_threads = [
         Thread.model_validate({
             **{c.name: getattr(t, c.name) for c in t.__table__.columns},
             "metadata": t.metadata_json,
         })
-        for t in result.all()
+        for t in rows
     ]
     return ThreadList(threads=user_threads, total=len(user_threads))
 
@@ -150,8 +151,8 @@ async def get_thread_history_post(
     try:
         # Validate and coerce inputs
         limit = request.limit or 10
-        if not isinstance(limit, int) or limit < 1 or limit > 100:
-            raise HTTPException(422, "Invalid limit; must be an integer between 1 and 100")
+        if not isinstance(limit, int) or limit < 1 or limit > 1000:
+            raise HTTPException(422, "Invalid limit; must be an integer between 1 and 1000")
 
         before = request.before
         if before is not None and not isinstance(before, str):
@@ -284,7 +285,7 @@ async def get_thread_history_post(
 @router.get("/threads/{thread_id}/history", response_model=List[ThreadState])
 async def get_thread_history_get(
     thread_id: str,
-    limit: int = Query(10, ge=1, le=100, description="Number of states to return"),
+    limit: int = Query(10, ge=1, le=1000, description="Number of states to return"),
     before: Optional[str] = Query(None, description="Return states before this checkpoint ID"),
     subgraphs: Optional[bool] = Query(False, description="Include states from subgraphs"),
     checkpoint_ns: Optional[str] = Query(None, description="Checkpoint namespace"),
@@ -332,7 +333,7 @@ async def delete_thread(
     return {"status": "deleted"}
 
 
-@router.post("/threads/search", response_model=ThreadSearchResponse)
+@router.post("/threads/search", response_model=List[Thread])
 async def search_threads(
     request: ThreadSearchRequest,
     user: User = Depends(get_current_user),
@@ -351,24 +352,22 @@ async def search_threads(
             stmt = stmt.where(ThreadORM.metadata_json[key].as_string() == str(value))
 
     # Count total first
-    total = len(await session.scalars(stmt).all())
+    _count_result = await session.scalars(stmt)
+    total = len(_count_result.all())
 
     offset = request.offset or 0
     limit = request.limit or 20
     stmt = stmt.offset(offset).limit(limit)
 
     result = await session.scalars(stmt)
+    rows = result.all()
     threads_models = [
         Thread.model_validate({
             **{c.name: getattr(t, c.name) for c in t.__table__.columns},
             "metadata": t.metadata_json,
         })
-        for t in result.all()
+        for t in rows
     ]
 
-    return ThreadSearchResponse(
-        threads=threads_models,
-        total=total,
-        limit=limit,
-        offset=offset,
-    )
+    # Return array of threads for client/vendor parity
+    return threads_models
