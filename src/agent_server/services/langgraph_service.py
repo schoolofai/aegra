@@ -213,7 +213,7 @@ def create_thread_config(thread_id: str, user, additional_config: Dict = None) -
     return inject_user_context(user, base_config)
 
 
-def create_run_config(run_id: str, thread_id: str, user, additional_config: Dict = None) -> Dict:
+def create_run_config(run_id: str, thread_id: str, user, additional_config: Dict = None, checkpoint: Dict | None = None) -> Dict:
     """Create LangGraph configuration for a specific run with full context.
 
     The function is *additive*: it never removes or renames anything the client
@@ -247,6 +247,9 @@ def create_run_config(run_id: str, thread_id: str, user, additional_config: Dict
             cfg["configurable"]["langgraph_auth_user"] = {
                 "identity": user.identity
             }
+    # Apply checkpoint parameters if provided
+    if checkpoint and isinstance(checkpoint, dict):
+        cfg["configurable"].update({k: v for k, v in checkpoint.items() if v is not None})
 
     # Finally inject any remaining user context via existing helper
     return inject_user_context(user, cfg)

@@ -9,6 +9,10 @@ class RunCreate(BaseModel):
     assistant_id: str = Field(..., description="Assistant to execute")
     input: Dict[str, Any] = Field(..., description="Input data for the run")
     config: Optional[Dict[str, Any]] = Field(None, description="LangGraph execution config")
+    checkpoint: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Checkpoint configuration (e.g., {'checkpoint_id': '...', 'checkpoint_ns': ''})",
+    )
     stream: bool = Field(False, description="Enable streaming response")
     stream_mode: Optional[str | list[str]] = Field(None, description="Requested stream mode(s) as per LangGraph")
 

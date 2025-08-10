@@ -137,7 +137,15 @@ async def create_run(
     # Start execution asynchronously
     task = asyncio.create_task(
         execute_run_async(
-            run_id, thread_id, assistant.graph_id, request.input or {}, user, request.config, request.stream_mode, session
+            run_id,
+            thread_id,
+            assistant.graph_id,
+            request.input or {},
+            user,
+            request.config,
+            request.stream_mode,
+            session,
+            request.checkpoint,
         )
     )
     print(f"[create_run] background task created task_id={id(task)} for run_id={run_id}")
@@ -220,7 +228,15 @@ async def create_and_stream_run(
     # Start background execution that will populate the broker
     task = asyncio.create_task(
         execute_run_async(
-            run_id, thread_id, assistant.graph_id, request.input or {}, user, request.config, request.stream_mode, session
+            run_id,
+            thread_id,
+            assistant.graph_id,
+            request.input or {},
+            user,
+            request.config,
+            request.stream_mode,
+            session,
+            request.checkpoint,
         )
     )
     print(f"[create_and_stream_run] background task created task_id={id(task)} for run_id={run_id}")
@@ -518,7 +534,8 @@ async def execute_run_async(
     user: User,
     config: Optional[dict] = None,
     stream_mode: Optional[list[str]] = None,
-    session: Optional[AsyncSession] = None
+    session: Optional[AsyncSession] = None,
+    checkpoint: Optional[dict] = None,
 ):
     """Execute run asynchronously in background using streaming to capture all events"""
     from ..services.streaming_service import streaming_service
@@ -545,7 +562,7 @@ async def execute_run_async(
         print(f"[execute_run_async] graph fetched graph_id={graph_id} type={type(graph)}")
         
         from ..services.langgraph_service import create_run_config
-        run_config = create_run_config(run_id, thread_id, user, config or {})
+        run_config = create_run_config(run_id, thread_id, user, config or {}, checkpoint)
         print(f"[execute_run_async] run_config created stream_mode={stream_mode or RUN_STREAM_MODES}")
         
         # Always execute using streaming to capture events for later replay
