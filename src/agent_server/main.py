@@ -82,10 +82,10 @@ app.add_middleware(
 
 # Include routers
 app.include_router(health_router, prefix="", tags=["Health"])
-app.include_router(assistants_router, prefix="/v1", tags=["Assistants"])
-app.include_router(threads_router, prefix="/v1", tags=["Threads"])
-app.include_router(runs_router, prefix="/v1", tags=["Runs"])
-app.include_router(store_router, prefix="/v1", tags=["Store"])
+app.include_router(assistants_router, prefix="", tags=["Assistants"])
+app.include_router(threads_router, prefix="", tags=["Threads"])
+app.include_router(runs_router, prefix="", tags=["Runs"])
+app.include_router(store_router, prefix="", tags=["Store"])
 
 
 # Error handling
