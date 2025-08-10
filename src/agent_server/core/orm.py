@@ -37,9 +37,6 @@ Base = declarative_base()
 
 class Assistant(Base):
     __tablename__ = "assistant"
-    __table_args__ = (
-        UniqueConstraint('user_id', 'graph_id', name='assistant_user_graph_unique'),
-    )
 
     # TEXT PK with DB-side generation using uuid_generate_v4()::text
     assistant_id: Mapped[str] = mapped_column(

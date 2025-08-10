@@ -4,6 +4,8 @@ import importlib.util
 from typing import Dict, Any, Optional, TypeVar
 from pathlib import Path
 from langgraph.graph import StateGraph
+from uuid import UUID, uuid5
+from ..constants import ASSISTANT_NAMESPACE_UUID
 
 State = TypeVar("State")
 
@@ -27,6 +29,10 @@ class LangGraphService:
         
         # Load graph registry from config
         self._load_graph_registry()
+
+        # Pre-register assistants for each graph using deterministic UUIDs so
+        # clients can pass graph_id directly.
+        await self._ensure_default_assistants()
     
     def _load_graph_registry(self):
         """Load graph definitions from langgraph.json"""
@@ -42,6 +48,39 @@ class LangGraphService:
                 "file_path": file_path,
                 "export_name": export_name
             }
+
+    async def _ensure_default_assistants(self) -> None:
+        """Create a default assistant per graph with deterministic UUID.
+
+        Uses uuid5 with a fixed namespace so that the same graph_id maps
+        to the same assistant_id across restarts. Idempotent.
+        """
+        from ..core.orm import Assistant as AssistantORM, get_session
+        from sqlalchemy import select
+        # Fixed namespace used to derive assistant IDs from graph IDs
+        NS = ASSISTANT_NAMESPACE_UUID
+        async for session in get_session():
+            try:
+                for graph_id in self._graph_registry.keys():
+                    assistant_id = str(uuid5(NS, graph_id))
+                    existing = await session.scalar(
+                        select(AssistantORM).where(AssistantORM.assistant_id == assistant_id)
+                    )
+                    if existing:
+                        continue
+                    session.add(
+                        AssistantORM(
+                            assistant_id=assistant_id,
+                            name=graph_id,
+                            description=f"Default assistant for graph '{graph_id}'",
+                            graph_id=graph_id,
+                            config={},
+                            user_id="system",
+                        )
+                    )
+                await session.commit()
+            finally:
+                break
     
     async def get_graph(self, graph_id: str, force_reload: bool = False) -> StateGraph[Any]:
         """Get a compiled graph by ID with caching and LangGraph integration"""

@@ -14,6 +14,7 @@ from ..models import Run, RunCreate, RunList, RunStatus, User
 from ..core.auth_deps import get_current_user
 from ..core.sse import get_sse_headers
 from ..services.langgraph_service import get_langgraph_service
+from ..utils.assistants import resolve_assistant_id
 
 router = APIRouter()
 
@@ -48,8 +49,8 @@ async def update_thread_metadata(session: AsyncSession, thread_id: str, assistan
         raise HTTPException(404, f"Thread '{thread_id}' not found for metadata update")
     md = dict(getattr(thread, "metadata_json", {}) or {})
     md.update({
-        "assistantId": str(assistant_id),
-        "graphId": graph_id,
+        "assistant_id": str(assistant_id),
+        "graph_id": graph_id,
     })
     await session.execute(
         update(ThreadORM)
@@ -76,10 +77,15 @@ async def create_run(
     print(f"create_run: scheduling background task run_id={run_id} thread_id={thread_id} user={user.identity}")
     print(f"[create_run] scheduling background task run_id={run_id} thread_id={thread_id} user={user.identity}")
 
-    # Validate assistant exists and get its graph_id (IDs are plain strings)
+    # Validate assistant exists and get its graph_id. If a graph_id was provided
+    # instead of an assistant UUID, map it deterministically and fall back to the
+    # default assistant created at startup.
+    requested_id = str(request.assistant_id)
+    available_graphs = langgraph_service.list_graphs()
+    resolved_assistant_id = resolve_assistant_id(requested_id, available_graphs)
+
     assistant_stmt = select(AssistantORM).where(
-        AssistantORM.assistant_id == str(request.assistant_id),
-        AssistantORM.user_id == user.identity
+        AssistantORM.assistant_id == resolved_assistant_id,
     )
     assistant = await session.scalar(assistant_stmt)
     if not assistant:
@@ -100,7 +106,7 @@ async def create_run(
     run_orm = RunORM(
         run_id=run_id,  # explicitly set (DB can also default-generate if omitted)
         thread_id=thread_id,
-        assistant_id=str(request.assistant_id),
+        assistant_id=resolved_assistant_id,
         status="pending",
         input=request.input or {},
         config=request.config or {},
@@ -117,7 +123,7 @@ async def create_run(
     run = Run(
         run_id=run_id,
         thread_id=thread_id,
-        assistant_id=str(request.assistant_id),
+        assistant_id=resolved_assistant_id,
         status="pending",
         input=request.input or {},
         config=request.config or {},
@@ -154,10 +160,15 @@ async def create_and_stream_run(
     langgraph_service = get_langgraph_service()
     print(f"[create_and_stream_run] scheduling background task run_id={run_id} thread_id={thread_id} user={user.identity}")
 
-    # Validate assistant exists and get its graph_id (IDs are plain strings)
+    # Validate assistant exists and get its graph_id. Allow passing a graph_id
+    # by mapping it to a deterministic assistant ID.
+    requested_id = str(request.assistant_id)
+    available_graphs = langgraph_service.list_graphs()
+
+    resolved_assistant_id = resolve_assistant_id(requested_id, available_graphs)
+
     assistant_stmt = select(AssistantORM).where(
-        AssistantORM.assistant_id == str(request.assistant_id),
-        AssistantORM.user_id == user.identity
+        AssistantORM.assistant_id == resolved_assistant_id,
     )
     assistant = await session.scalar(assistant_stmt)
     if not assistant:
@@ -178,7 +189,7 @@ async def create_and_stream_run(
     run_orm = RunORM(
         run_id=run_id,
         thread_id=thread_id,
-        assistant_id=str(request.assistant_id),
+        assistant_id=resolved_assistant_id,
         status="streaming",
         input=request.input or {},
         config=request.config or {},
@@ -195,7 +206,7 @@ async def create_and_stream_run(
     run = Run(
         run_id=run_id,
         thread_id=thread_id,
-        assistant_id=str(request.assistant_id),
+        assistant_id=resolved_assistant_id,
         status="streaming",
         input=request.input or {},
         config=request.config or {},

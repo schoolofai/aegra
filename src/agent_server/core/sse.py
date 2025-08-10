@@ -81,7 +81,7 @@ def create_debug_event(debug_data: Dict[str, Any], event_id: Optional[str] = Non
 
 def create_end_event(event_id: Optional[str] = None) -> str:
     """Create end event - signals completion of stream"""
-    return format_sse_message("end", None, event_id)
+    return format_sse_message("end", {"status": "completed"}, event_id)
 
 
 def create_error_event(error: str, event_id: Optional[str] = None) -> str:
