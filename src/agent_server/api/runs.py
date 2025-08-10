@@ -550,20 +550,15 @@ async def execute_run_async(
         stream_mode = _normalize_mode(stream_mode)
     
     try:
-        print(f"[execute_run_async] ENTER run_id={run_id} thread_id={thread_id} graph_id={graph_id}")
         # Update status
         await update_run_status(run_id, "running", session=session)
-        print(f"[execute_run_async] status->running run_id={run_id}")
         
         # Get graph and execute
         langgraph_service = get_langgraph_service()
-        print(f"[execute_run_async] fetching graph graph_id={graph_id}")
         graph = await langgraph_service.get_graph(graph_id)
-        print(f"[execute_run_async] graph fetched graph_id={graph_id} type={type(graph)}")
         
         from ..services.langgraph_service import create_run_config
         run_config = create_run_config(run_id, thread_id, user, config or {}, checkpoint)
-        print(f"[execute_run_async] run_config created stream_mode={stream_mode or RUN_STREAM_MODES}")
         
         # Always execute using streaming to capture events for later replay
         event_counter = 0
@@ -571,7 +566,6 @@ async def execute_run_async(
         # Use streaming service's broker system to distribute events
         from ..core.auth_ctx import with_auth_ctx
         async with with_auth_ctx(user, []):
-            print(f"[execute_run_async] entering astream loop run_id={run_id}")
             async for raw_event in graph.astream(
                 input_data,
                 config=run_config,
@@ -595,48 +589,39 @@ async def execute_run_async(
         event_counter += 1
         end_event_id = f"{run_id}_event_{event_counter}"
         end_event = ("end", {"status": "completed", "final_output": final_output})
-        print(f"[execute_run_async] signalling end id={end_event_id}")
         
         await streaming_service.put_to_broker(run_id, end_event_id, end_event)
         await streaming_service.store_event_from_raw(run_id, end_event_id, end_event)
         
         # Update with results (store empty JSON to avoid serialization issues for now)
         await update_run_status(run_id, "completed", output={}, session=session)
-        print(f"[execute_run_async] COMPLETED run_id={run_id} thread_id={thread_id}")
         # Mark thread back to idle
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
-        print(f"[execute_run_async] thread status set idle thread_id={thread_id}")
         
     except asyncio.CancelledError:
-        print(f"[execute_run_async] CANCELLED run_id={run_id}")
         # Store empty output to avoid JSON serialization issues
         await update_run_status(run_id, "cancelled", output={}, session=session)
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
-        print(f"[execute_run_async] cancelled run_id={run_id} thread_id={thread_id}")
         # Signal cancellation to broker
         await streaming_service.signal_run_cancelled(run_id)
         raise
     except Exception as e:
-        print(f"[execute_run_async] EXCEPTION run_id={run_id} error={e}")
         # Store empty output to avoid JSON serialization issues
         await update_run_status(run_id, "failed", output={}, error=str(e), session=session)
         if not session:
             raise RuntimeError(f"No database session available to update thread {thread_id} status")
         await set_thread_status(session, thread_id, "idle")
-        print(f"[execute_run_async] FAILED run_id={run_id} thread_id={thread_id} error={e}")
         # Signal error to broker
         await streaming_service.signal_run_error(run_id, str(e))
         raise
     finally:
         # Clean up broker
-        print(f"[execute_run_async] cleaning up broker and active_runs run_id={run_id}")
         await streaming_service.cleanup_run(run_id)
         active_runs.pop(run_id, None)
-        print(f"[execute_run_async] cleanup done run_id={run_id}")
 
 
 async def update_run_status(
