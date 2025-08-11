@@ -33,7 +33,7 @@ async def test_history_endpoint_e2e():
 
     # Create an assistant (idempotent if server supports if_exists/do_nothing)
     assistant = await client.assistants.create(
-        graph_id="chat_agent",
+        graph_id="agent",
         config={"tags": ["chat", "llm"]},
         if_exists="do_nothing",
     )

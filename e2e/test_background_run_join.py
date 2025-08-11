@@ -19,7 +19,7 @@ async def test_background_run_and_join_e2e():
 
     # Ensure assistant exists
     assistant = await client.assistants.create(
-        graph_id="chat_agent",
+        graph_id="agent",
         config={"tags": ["chat", "background"]},
         if_exists="do_nothing",
     )

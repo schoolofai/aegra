@@ -19,6 +19,5 @@ def elog(title: str, payload):
 def get_e2e_client():
     """Construct a LangGraph SDK client from env and log the target URL."""
     server_url = os.getenv("SERVER_URL", "http://localhost:8000/v1")
-    api_key = os.getenv("API_KEY", "test-key")
     print(f"[E2E] Using SERVER_URL={server_url}")
-    return get_client(url=server_url, api_key=api_key)
+    return get_client(url=server_url)

@@ -652,7 +652,7 @@ async def update_run_status(
             values["output"] = output
         if error is not None:
             values["error_message"] = error
-        print(f"[update_run_status] updating DB run_id={run_id} keys={list(values.keys())}")
+        print(f"[update_run_status] updating DB run_id={run_id} status={status}")
         await session.execute(update(RunORM).where(RunORM.run_id == str(run_id)).values(**values))  # type: ignore[arg-type]
         await session.commit()
         print(f"[update_run_status] commit done run_id={run_id}")

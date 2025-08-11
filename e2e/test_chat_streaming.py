@@ -13,7 +13,7 @@ async def test_chat_streaming_e2e():
 
     # Ensure assistant exists
     assistant = await client.assistants.create(
-        graph_id="chat_agent",
+        graph_id="agent",
         config={"tags": ["chat", "stream"]},
         if_exists="do_nothing",
     )

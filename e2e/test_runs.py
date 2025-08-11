@@ -9,7 +9,7 @@ async def test_runs_crud_and_join_e2e():
     """
     Mirrors existing e2e style using the typed SDK client (see test_chat_streaming, test_background_run_join).
     Validates the non-streaming "background run" flow and CRUD around it:
-      1) Ensure assistant exists (graph_id=chat_agent)
+      1) Ensure assistant exists (graph_id=agent)
       2) Create a thread
       3) Create a background run (non-stream)
       4) Join the run for final output
@@ -21,7 +21,7 @@ async def test_runs_crud_and_join_e2e():
 
     # 1) Assistant
     assistant = await client.assistants.create(
-        graph_id="chat_agent",
+        graph_id="agent",
         config={"tags": ["chat", "runs-crud"]},
         if_exists="do_nothing",
     )
@@ -94,7 +94,7 @@ async def test_runs_cancel_e2e():
 
     # Assistant + thread
     assistant = await client.assistants.create(
-        graph_id="chat_agent",
+        graph_id="agent",
         config={"tags": ["chat", "runs-cancel"]},
         if_exists="do_nothing",
     )

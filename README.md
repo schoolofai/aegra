@@ -11,7 +11,7 @@ Based on the [Agent Protocol specification](https://github.com/langchain-ai/agen
 ## ✨ Why This Exists
 
 - **Zero Vendor Lock-in**: Own your agent infrastructure completely
-- **Drop-in Replacement**: Backward compatible with LangGraph Client SDK
+- **Drop-in Replacement**: Compatible with LangGraph Client SDK
 - **Production Ready**: PostgreSQL persistence, streaming, auth
 - **Developer First**: Clean OSS implementation that's easy to run and evolve
 
@@ -36,7 +36,7 @@ uv install
 docker-compose up -d postgres
 
 # Launch server
-uv run uvicorn src.agent_server.main:app --reload
+python run_server.py
 ```
 
 ### Verify It Works
@@ -67,7 +67,7 @@ agent-protocol-server/
 ├── langgraph.json              # Graph configuration
 ├── auth.py                     # Authentication setup
 ├── graphs/                     # Agent definitions
-│   └── weather_agent.py        # Example agent
+│   └── react_agent/            # Example agent
 ├── src/agent_server/           # FastAPI application
 │   ├── main.py                 # App entrypoint
 │   ├── core/                   # Database & infrastructure
@@ -93,7 +93,6 @@ HOST=0.0.0.0
 PORT=8000
 DEBUG=true
 
-# LLM API Key (if using chat_agent.py)
 OPENAI_API_KEY=sk-...
 ```
 
@@ -101,31 +100,57 @@ OPENAI_API_KEY=sk-...
 
 ```json
 {
+  "$schema": "https://raw.githubusercontent.com/langchain-ai/langgraph/refs/heads/main/libs/cli/schemas/schema.json",
+  "dependencies": ["."],
   "graphs": {
-    "weather_agent": "./graphs/weather_agent.py:graph"
+    "agent": "./graphs/react_agent/graph.py:graph"
   },
+  "env": ".env",
   "auth": {
     "path": "./auth.py:auth"
   }
 }
 ```
 
-## 🧪 Try the Example Agent
+## 🧪 Try the Example Agent (Client SDK)
 
-```bash
-# Create a thread
-curl -X POST http://localhost:8000/threads \
-  -H "Content-Type: application/json" \
-  -d '{}'
+```python
+import asyncio
+from langgraph_sdk import get_client
 
-# Start a run
-curl -X POST http://localhost:8000/runs \
-  -H "Content-Type: application/json" \
-  -d '{
-    "assistant_id": "weather_agent",
-    "thread_id": "<YOUR_THREAD_ID>",
-    "input": {"location": "San Francisco"}
-  }'
+async def main():
+    client = get_client(url="http://localhost:8000")
+
+    # 1) Create (or reuse) an assistant for your graph
+    assistant = await client.assistants.create(
+        graph_id="agent",
+        if_exists="do_nothing",
+        config={},
+    )
+    assistant_id = assistant["assistant_id"]
+
+    # 2) Create a thread
+    thread = await client.threads.create()
+    thread_id = thread["thread_id"]
+
+    # 3) Create + stream a run and log events
+    stream = client.runs.stream(
+        thread_id=thread_id,
+        assistant_id=assistant_id,                 # can also pass "agent" directly
+        input={
+            "messages": [
+                {"type": "human", "content": [{"type": "text", "text": "hello"}]}
+            ]
+        },
+        stream_mode=["values", "messages-tuple", "custom"],
+        on_disconnect="cancel",
+        # checkpoint={"checkpoint_id": "...", "checkpoint_ns": ""},
+    )
+
+    async for chunk in stream:
+        print("event:", getattr(chunk, "event", None), "data:", getattr(chunk, "data", None))
+
+asyncio.run(main())
 ```
 
 ## 🎯 What You Get
