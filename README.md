@@ -28,9 +28,13 @@ Based on the [Agent Protocol specification](https://github.com/langchain-ai/agen
 
 ```bash
 # Clone and setup
-git clone <repository-url>
+git clone https://github.com/ibbybuilds/agent-protocol-server.git
 cd agent-protocol-server
 uv install
+
+source .venv/bin/activate (for mac/linux)
+OR
+/.venv/Scripts/activate (for windows)
 
 # Start database
 docker-compose up -d postgres
