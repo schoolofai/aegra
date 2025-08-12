@@ -85,7 +85,7 @@ Aegra is an **Agent Protocol server** that acts as an HTTP wrapper around **offi
 
 ### Configuration System
 
-**langgraph.json**: Central configuration file that defines:
+**aegra.json**: Central configuration file that defines:
 
 - Graph definitions: `"weather_agent": "./graphs/weather_agent.py:graph"`
 - Authentication: `"auth": {"path": "./auth.py:auth"}`

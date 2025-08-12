@@ -1,5 +1,6 @@
 """LangGraph integration service with official patterns"""
 import json
+import os
 import importlib.util
 from typing import Dict, Any, Optional, TypeVar
 from pathlib import Path
@@ -13,17 +14,46 @@ State = TypeVar("State")
 class LangGraphService:
     """Service to work with LangGraph CLI configuration and graphs"""
     
-    def __init__(self, config_path: str = "langgraph.json"):
+    def __init__(self, config_path: str = "aegra.json"):
+        # Default path can be overridden via AEGRA_CONFIG or by placing aegra.json
         self.config_path = Path(config_path)
         self.config: Optional[Dict[str, Any]] = None
         self._graph_registry: Dict[str, Any] = {}
         self._graph_cache: Dict[str, Any] = {}
         
     async def initialize(self):
-        """Load langgraph.json configuration and setup graph registry"""
-        if not self.config_path.exists():
-            raise ValueError(f"LangGraph config not found: {self.config_path}")
-        
+        """Load configuration file and setup graph registry.
+
+        Resolution order:
+        1) AEGRA_CONFIG env var (absolute or relative path)
+        2) Explicit self.config_path if it exists
+        3) aegra.json in CWD
+        4) langgraph.json in CWD (fallback)
+        """
+        # 1) Env var override
+        env_path = os.getenv("AEGRA_CONFIG")
+        resolved_path: Path
+        if env_path:
+            resolved_path = Path(env_path)
+        # 2) Provided path if exists
+        elif self.config_path and Path(self.config_path).exists():
+            resolved_path = Path(self.config_path)
+        # 3) aegra.json if present
+        elif Path("aegra.json").exists():
+            resolved_path = Path("aegra.json")
+        # 4) fallback to langgraph.json
+        else:
+            resolved_path = Path("langgraph.json")
+
+        if not resolved_path.exists():
+            raise ValueError(
+                "Configuration file not found. Expected one of: "
+                "AEGRA_CONFIG path, ./aegra.json, or ./langgraph.json"
+            )
+
+        # Persist selected path for later reference
+        self.config_path = resolved_path
+
         with open(self.config_path) as f:
             self.config = json.load(f)
         
@@ -35,7 +65,7 @@ class LangGraphService:
         await self._ensure_default_assistants()
     
     def _load_graph_registry(self):
-        """Load graph definitions from langgraph.json"""
+        """Load graph definitions from aegra.json"""
         graphs_config = self.config.get("graphs", {})
         
         for graph_id, graph_path in graphs_config.items():
@@ -166,11 +196,11 @@ class LangGraphService:
             self._graph_cache.clear()
     
     def get_config(self) -> Optional[Dict[str, Any]]:
-        """Get full langgraph.json configuration"""
+        """Get loaded configuration"""
         return self.config
     
     def get_dependencies(self) -> list:
-        """Get dependencies from langgraph.json"""
+        """Get dependencies from config"""
         return self.config.get("dependencies", [])
 
 

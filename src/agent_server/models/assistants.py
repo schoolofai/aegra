@@ -10,7 +10,7 @@ class AssistantCreate(BaseModel):
     name: Optional[str] = Field(None, description="Human-readable assistant name (auto-generated if not provided)")
     description: Optional[str] = Field(None, description="Assistant description")
     config: Optional[Dict[str, Any]] = Field(None, description="Assistant configuration")
-    graph_id: str = Field(..., description="LangGraph graph ID from langgraph.json")
+    graph_id: str = Field(..., description="LangGraph graph ID from aegra.json")
     if_exists: Optional[str] = Field("error", description="What to do if assistant exists: error, do_nothing, or replace")
 
 

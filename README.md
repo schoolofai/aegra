@@ -1,28 +1,48 @@
-# Aegra (previously agent-protocol-server)
+# Aegra - Open Source LangGraph Platform Alternative
 
-> **Replace LangGraph Platform with your own backend – zero vendor lock-in, full control.**
+<p align="center">
+  <strong>Self-hosted AI agent backend. LangGraph power without vendor lock-in.</strong>
+</p>
 
-An open-source, production-ready backend for running, persisting, and streaming AI agents with LangGraph compatibility. Built with FastAPI and PostgreSQL for developers who demand control over their agent orchestration.
+<p align="center">
+  <a href="https://github.com/ibbybuilds/aegra/stargazers"><img src="https://img.shields.io/github/stars/ibbybuilds/aegra" alt="GitHub stars"></a>
+  <a href="https://github.com/ibbybuilds/aegra/blob/main/LICENSE"><img src="https://img.shields.io/github/license/ibbybuilds/aegra" alt="License"></a>
+  <a href="https://github.com/ibbybuilds/aegra/issues"><img src="https://img.shields.io/github/issues/ibbybuilds/aegra" alt="Issues"></a>
+</p>
 
-Based on the [Agent Protocol specification](https://github.com/langchain-ai/agent-protocol), with modifications to maintain backward compatibility with the LangGraph Client SDK.
+Replace LangGraph Platform with your own infrastructure. Built with FastAPI + PostgreSQL for developers who demand complete control over their agent orchestration.
 
-**Status**: Work in progress — actively improving DX, protocol coverage, and production hardening. Contributors welcome!
+**🎯 Perfect for:** Teams escaping vendor lock-in • Data sovereignty requirements • Custom deployments • Cost optimization
 
-## ✨ Why This Exists
+---
 
-- **Zero Vendor Lock-in**: Own your agent infrastructure completely
-- **Drop-in Replacement**: Compatible with LangGraph Client SDK
-- **Production Ready**: PostgreSQL persistence, streaming, auth
-- **Developer First**: Clean OSS implementation that's easy to run and evolve
+## 🔥 Why Aegra vs LangGraph Platform?
+
+| Feature                | LangGraph Platform   | Aegra (Self-Hosted)     |
+| ---------------------- | -------------------- | ----------------------- |
+| **Cost**               | $$$+ per month       | **Free**                |
+| **Data Control**       | Third-party hosted   | **Your infrastructure** |
+| **Vendor Lock-in**     | High dependency      | **Zero lock-in**        |
+| **Customization**      | Platform limitations | **Full control**        |
+| **EU/GDPR Compliance** | Complex setup        | **Built-in**            |
+| **API Compatibility**  | LangGraph SDK        | **Same LangGraph SDK**  |
+
+## ✨ Core Benefits
+
+- **🏠 Self-Hosted**: Run on your infrastructure, your rules
+- **🔄 Drop-in Replacement**: Use existing LangGraph Client SDK without changes
+- **🛡️ Production Ready**: PostgreSQL persistence, streaming, authentication
+- **📊 Zero Vendor Lock-in**: MIT license, open source, full control
+- **🚀 Fast Setup**: 5-minute deployment with Docker
+- **🔌 Agent Protocol Compliant**: Standards-based implementation
 
 ## 🚀 Quick Start (5 minutes)
 
 ### Prerequisites
 
 - Python 3.11+
-- PostgreSQL 15+
+- Docker (for PostgreSQL)
 - uv (Python package manager)
-- Docker (for local Postgres)
 
 ### Get Running
 
@@ -32,9 +52,9 @@ git clone https://github.com/ibbybuilds/aegra.git
 cd aegra
 uv install
 
-source .venv/bin/activate (for mac/linux)
-OR
-/.venv/Scripts/activate (for windows)
+# Activate environment
+source .venv/bin/activate  # Mac/Linux
+# OR .venv/Scripts/activate  # Windows
 
 # Start database
 docker-compose up -d postgres
@@ -46,50 +66,105 @@ python run_server.py
 ### Verify It Works
 
 ```bash
+# Health check
 curl http://localhost:8000/health
-open http://localhost:8000/docs  # Interactive API docs
+
+# Interactive API docs
+open http://localhost:8000/docs
 ```
+
+**🎉 You now have a self-hosted LangGraph Platform alternative running locally!**
+
+## 🧪 Try the Example Agent
+
+Use the **same LangGraph Client SDK** you're already familiar with:
+
+```python
+import asyncio
+from langgraph_sdk import get_client
+
+async def main():
+    # Connect to your self-hosted Aegra instance
+    client = get_client(url=\"http://localhost:8000\")
+
+    # Create assistant (same API as LangGraph Platform)
+    assistant = await client.assistants.create(
+        graph_id=\"agent\",
+        if_exists=\"do_nothing\",
+        config={},
+    )
+    assistant_id = assistant[\"assistant_id\"]
+
+    # Create thread
+    thread = await client.threads.create()
+    thread_id = thread[\"thread_id\"]
+
+    # Stream responses (identical to LangGraph Platform)
+    stream = client.runs.stream(
+        thread_id=thread_id,
+        assistant_id=assistant_id,
+        input={
+            \"messages\": [
+                {\"type\": \"human\", \"content\": [{\"type\": \"text\", \"text\": \"hello\"}]}
+            ]
+        },
+        stream_mode=[\"values\", \"messages-tuple\", \"custom\"],
+        on_disconnect=\"cancel\",
+    )
+
+    async for chunk in stream:
+        print(f\"event: {getattr(chunk, 'event', None)}, data: {getattr(chunk, 'data', None)}\")
+
+asyncio.run(main())
+```
+
+**Key Point**: Your existing LangGraph applications work without modification! 🔄
 
 ## 🏗️ Architecture
 
 ```
 Client → FastAPI → LangGraph SDK → PostgreSQL
-         ↓           ↓              ↓
-   Agent Protocol  Auth/Graph   Checkpoints
-   Endpoints       Execution     Metadata
+ ↓         ↓           ↓             ↓
+Agent    HTTP     State        Persistent
+SDK      API    Management      Storage
 ```
 
-- **FastAPI**: HTTP layer with Agent Protocol compliance
+### Components
+
+- **FastAPI**: Agent Protocol-compliant HTTP layer
 - **LangGraph**: State management and graph execution
-- **PostgreSQL**: Durable state and metadata storage
-- **Config-driven**: `langgraph.json` maps graphs to endpoints
+- **PostgreSQL**: Durable checkpoints and metadata
+- **Config-driven**: `aegra.json` for graph definitions
 
 ## 📁 Project Structure
 
 ```
 aegra/
-├── langgraph.json              # Graph configuration
-├── auth.py                     # Authentication setup
-├── graphs/                     # Agent definitions
-│   └── react_agent/            # Example agent
-├── src/agent_server/           # FastAPI application
-│   ├── main.py                 # App entrypoint
-│   ├── core/                   # Database & infrastructure
-│   ├── models/                 # Pydantic schemas
-│   ├── services/               # Business logic
-│   └── utils/                  # Helpers
-└── tests/                      # Test suite
+├── aegra.json           # Graph configuration
+├── auth.py              # Authentication setup
+├── graphs/              # Agent definitions
+│   └── react_agent/     # Example ReAct agent
+├── src/agent_server/    # FastAPI application
+│   ├── main.py         # Application entrypoint
+│   ├── core/           # Database & infrastructure
+│   ├── models/         # Pydantic schemas
+│   ├── services/       # Business logic
+│   └── utils/          # Helper functions
+├── tests/              # Test suite
+└── deployments/        # Docker & K8s configs
 ```
 
 ## ⚙️ Configuration
 
-### Environment Variables (.env)
+### Environment Variables
+
+Create `.env` file:
 
 ```bash
 # Database
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/aegra
 
-# Authentication
+# Authentication (extensible)
 AUTH_TYPE=noop  # noop, custom
 
 # Server
@@ -97,128 +172,122 @@ HOST=0.0.0.0
 PORT=8000
 DEBUG=true
 
+# LLM Providers
 OPENAI_API_KEY=sk-...
+# ANTHROPIC_API_KEY=...
+# TOGETHER_API_KEY=...
 ```
 
-### Graph Configuration (langgraph.json)
+### Graph Configuration
+
+`aegra.json` defines your agent graphs:
 
 ```json
 {
-  "$schema": "https://raw.githubusercontent.com/langchain-ai/langgraph/refs/heads/main/libs/cli/schemas/schema.json",
-  "dependencies": ["."],
   "graphs": {
     "agent": "./graphs/react_agent/graph.py:graph"
-  },
-  "env": ".env",
-  "auth": {
-    "path": "./auth.py:auth"
   }
 }
 ```
 
-## 🧪 Try the Example Agent (Client SDK)
-
-```python
-import asyncio
-from langgraph_sdk import get_client
-
-async def main():
-    client = get_client(url="http://localhost:8000")
-
-    # 1) Create (or reuse) an assistant for your graph
-    assistant = await client.assistants.create(
-        graph_id="agent",
-        if_exists="do_nothing",
-        config={},
-    )
-    assistant_id = assistant["assistant_id"]
-
-    # 2) Create a thread
-    thread = await client.threads.create()
-    thread_id = thread["thread_id"]
-
-    # 3) Create + stream a run and log events
-    stream = client.runs.stream(
-        thread_id=thread_id,
-        assistant_id=assistant_id,                 # can also pass "agent" directly
-        input={
-            "messages": [
-                {"type": "human", "content": [{"type": "text", "text": "hello"}]}
-            ]
-        },
-        stream_mode=["values", "messages-tuple", "custom"],
-        on_disconnect="cancel",
-        # checkpoint={"checkpoint_id": "...", "checkpoint_ns": ""},
-    )
-
-    async for chunk in stream:
-        print("event:", getattr(chunk, "event", None), "data:", getattr(chunk, "data", None))
-
-asyncio.run(main())
-```
-
 ## 🎯 What You Get
 
-- ✅ **Agent Protocol-compliant REST endpoints**
-- ✅ **Persistent conversations with database-backed checkpoints**
-- ✅ **Config-driven agent graphs**
-- ✅ **Pluggable authentication (JWT, OAuth, custom)**
-- ✅ **Streaming responses with network drop resilience**
-- ✅ **Backward compatible with LangGraph Client SDK** (uses "assistant" naming in schemas for compatibility)
-- ✅ **Production-ready with Docker, monitoring, CI/CD**
+### ✅ **Core Features**
+
+- Agent Protocol-compliant REST endpoints
+- Persistent conversations with PostgreSQL checkpoints
+- Streaming responses with network resilience
+- Config-driven agent graph management
+- Compatible with LangGraph Client SDK
+
+### ✅ **Production Ready**
+
+- Docker containerization
+- Database migrations with Alembic
+- Comprehensive test suite
+- Authentication framework (JWT/OAuth ready)
+- Health checks and monitoring endpoints
+
+### ✅ **Developer Experience**
+
+- Interactive API documentation (FastAPI)
+- Hot reload in development
+- Clear error messages and logging
+- Extensible architecture
 
 ## 📊 Development Status
 
-### ✅ Phase 1: Foundation (Complete)
+### ✅ **Phase 1: Foundation (Complete)**
 
-- Project structure and dependencies
 - FastAPI application with LangGraph integration
-- Database setup with PostgreSQL
+- PostgreSQL database and migrations
 - Basic authentication framework
-- Health checks and development environment
+- Health checks and API documentation
 
-### 🔄 Phase 2: Agent Protocol API (In Progress)
+### 🔄 **Phase 2: Agent Protocol API (In Progress)**
 
 - Assistant management endpoints
-- Thread creation and management
+- Thread creation and persistence
 - Run execution with streaming
-- Store operations (key-value + vector)
+- Store operations (key-value + vector search)
 
-### 📋 Phase 3: Production Features (Planned)
+### 📋 **Phase 3: Production Features (Planned)**
 
-- Comprehensive authentication backends
+- Advanced authentication backends
 - Multi-tenant isolation
-- Monitoring and metrics
-- Deployment configurations
+- Monitoring and metrics integration
+- Deployment automation
 
 ## 🛣️ Roadmap
 
-- **Human-in-the-loop interrupts** (pause/resume, manual decisions)
-- **Redis-backed streaming buffers** for resilience and scale
-- **Langfuse integration** for tracing
-- **Assistant management endpoints** and improved UX
-- **Store operations** (kv + vector)
-- **Multi-tenant isolation** and auth backends
-- **Deployment recipes** (Docker/K8s)
+**🎯 Next**
 
-## 🚀 Production Deployment
+- Client example in Next.js
+- Human-in-the-loop interrupts
+- Redis-backed streaming buffers
+- Langfuse integration
 
-- Run with multiple workers behind a reverse proxy
-- Use managed PostgreSQL with backups and monitoring
-- Configure proper auth (JWT/OIDC) and CORS
-- Export metrics/logs to your observability stack
+**🚀 Future**
+
+- Multi-tenant architecture
+- Advanced deployment recipes
+- Performance optimizations
+- Additional LLM provider integrations
 
 ## 🤝 Contributing
 
-We're looking for contributors to:
+We welcome contributions! Here's how you can help:
 
-- Improve spec alignment and API ergonomics
-- Harden streaming/resume semantics
-- Add auth backends and deployment guides
-- Expand examples and tests
+**🐛 Issues & Bugs**
 
-**Open issues/PRs** - run tests and follow style guidelines.
+- Report bugs with detailed reproduction steps
+- Suggest new features and improvements
+- Help with documentation
+
+**💻 Code Contributions**
+
+- Improve Agent Protocol spec alignment
+- Add authentication backends
+- Enhance testing coverage
+- Optimize performance
+
+**📚 Documentation**
+
+- Deployment guides
+- Integration examples
+- Best practices
+
+**Get Started**: Check out [CONTRIBUTING.md](CONTRIBUTING.md) and our [good first issues](https://github.com/ibbybuilds/aegra/labels/good%20first%20issue).
 
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) file for details.
+
+**TL;DR**: Use it, modify it, distribute it, sell it. We only ask that you keep the license notice.
+
+---
+
+<p align=\"center\">
+  <strong>⭐ If Aegra helps you escape vendor lock-in, please star the repo! ⭐</strong><br>
+  <sub>Built with ❤️ by developers who believe in infrastructure freedom</sub>
+</p>

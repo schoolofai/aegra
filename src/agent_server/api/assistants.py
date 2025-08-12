@@ -44,7 +44,7 @@ async def create_assistant(
     if graph_id not in available_graphs:
         raise HTTPException(
             400,
-            f"Graph '{graph_id}' not found in langgraph.json. Available: {list(available_graphs.keys())}"
+            f"Graph '{graph_id}' not found in aegra.json. Available: {list(available_graphs.keys())}"
         )
     
     # Validate graph can be loaded
