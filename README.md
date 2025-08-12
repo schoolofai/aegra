@@ -18,14 +18,16 @@ Replace LangGraph Platform with your own infrastructure. Built with FastAPI + Po
 
 ## 🔥 Why Aegra vs LangGraph Platform?
 
-| Feature                | LangGraph Platform   | Aegra (Self-Hosted)     |
-| ---------------------- | -------------------- | ----------------------- |
-| **Cost**               | $$$+ per month       | **Free**                |
-| **Data Control**       | Third-party hosted   | **Your infrastructure** |
-| **Vendor Lock-in**     | High dependency      | **Zero lock-in**        |
-| **Customization**      | Platform limitations | **Full control**        |
-| **EU/GDPR Compliance** | Complex setup        | **Built-in**            |
-| **API Compatibility**  | LangGraph SDK        | **Same LangGraph SDK**  |
+| Feature                | LangGraph Platform         | Aegra (Self-Hosted)                               |
+| ---------------------- | -------------------------- | ------------------------------------------------- |
+| **Cost**               | $$$+ per month             | **Free** (self-hosted), infra-cost only           |
+| **Data Control**       | Third-party hosted         | **Your infrastructure**                           |
+| **Vendor Lock-in**     | High dependency            | **Zero lock-in**                                  |
+| **Customization**      | Platform limitations       | **Full control**                                  |
+| **API Compatibility**  | LangGraph SDK              | **Same LangGraph SDK**                            |
+| **Authentication**     | Lite: no custom auth       | **Custom auth** (JWT/OAuth/Firebase/NoAuth)       |
+| **Database Ownership** | No bring-your-own database | **BYO Postgres** (you own credentials and schema) |
+| **Tracing/Telemetry**  | Forced LangSmith in SaaS   | **Your choice** (Langfuse/None)                   |
 
 ## ✨ Core Benefits
 
