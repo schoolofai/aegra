@@ -7,26 +7,26 @@ services:
     environment:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: password
-      POSTGRES_DB: agent_protocol_server
+      POSTGRES_DB: aegra
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U user -d agent_protocol_server"]
+      test: ["CMD-SHELL", "pg_isready -U user -d aegra"]
       interval: 5s
       timeout: 5s
       retries: 5
 
-  # LangGraph Agent Server
-  agent-server:
+  # Aegra Server
+  aegra:
     build:
       context: .
       dockerfile: deployments/docker/Dockerfile
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/agent_protocol_server
+      - DATABASE_URL=postgresql+asyncpg://user:password@postgres:5432/aegra
       - AUTH_TYPE=noop
       - DEBUG=true
     depends_on:

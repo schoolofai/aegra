@@ -1,5 +1,5 @@
 def main():
-    print("Hello from agent-protocol-server!")
+    print("Hello from aegra!")
 
 
 if __name__ == "__main__":

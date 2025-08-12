@@ -2,9 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Project: Aegra — Open Source LangGraph Backend (Agent Protocol Server)
+
 ## Development Commands
 
 ### Environment Setup
+
 ```bash
 # Install dependencies
 uv install
@@ -14,6 +17,7 @@ source .venv/bin/activate
 ```
 
 ### Running the Application
+
 ```bash
 # Start development server with auto-reload
 uv run uvicorn src.agent_server.main:app --reload
@@ -26,6 +30,7 @@ docker-compose up -d postgres
 ```
 
 ### Testing
+
 ```bash
 # Run all tests
 uv run pytest
@@ -44,6 +49,7 @@ curl http://localhost:8000/health
 ```
 
 ### Database Management
+
 ```bash
 # Database migrations (when implemented)
 alembic upgrade head
@@ -55,6 +61,7 @@ docker-compose up -d postgres
 ```
 
 ### Code Quality (Optional - not currently configured)
+
 ```bash
 # If ruff is added to dependencies, use:
 # uv run ruff check .
@@ -66,11 +73,12 @@ docker-compose up -d postgres
 
 ## High-Level Architecture
 
-This is an **Agent Protocol server** that acts as an HTTP wrapper around **official LangGraph packages**. The key architectural principle is that LangGraph handles ALL state persistence and graph execution, while the FastAPI layer only provides Agent Protocol compliance.
+Aegra is an **Agent Protocol server** that acts as an HTTP wrapper around **official LangGraph packages**. The key architectural principle is that LangGraph handles ALL state persistence and graph execution, while the FastAPI layer only provides Agent Protocol compliance.
 
 ### Core Integration Pattern
 
 **Database Architecture**: The system uses a hybrid approach:
+
 - **LangGraph manages state**: Official `AsyncPostgresSaver` and `AsyncPostgresStore` handle conversation checkpoints, state history, and long-term memory
 - **Minimal metadata tables**: Our SQLAlchemy models only track Agent Protocol metadata (assistants, runs, thread_metadata)
 - **URL format difference**: LangGraph requires `postgresql://` while our SQLAlchemy uses `postgresql+asyncpg://`
@@ -78,11 +86,13 @@ This is an **Agent Protocol server** that acts as an HTTP wrapper around **offic
 ### Configuration System
 
 **langgraph.json**: Central configuration file that defines:
+
 - Graph definitions: `"weather_agent": "./graphs/weather_agent.py:graph"`
 - Authentication: `"auth": {"path": "./auth.py:auth"}`
 - Dependencies and environment
 
 **auth.py**: Uses LangGraph SDK Auth patterns:
+
 - `@auth.authenticate` decorator for user authentication
 - `@auth.on.{resource}.{action}` for resource-level authorization
 - Returns `Auth.types.MinimalUserDict` with user identity and metadata
@@ -90,6 +100,7 @@ This is an **Agent Protocol server** that acts as an HTTP wrapper around **offic
 ### Database Manager Pattern
 
 **DatabaseManager** (src/agent_server/core/database.py):
+
 - Initializes both SQLAlchemy engine and LangGraph components
 - Handles URL conversion between asyncpg and psycopg formats
 - Provides singleton access to checkpointer and store instances
@@ -98,6 +109,7 @@ This is an **Agent Protocol server** that acts as an HTTP wrapper around **offic
 ### Graph Loading Strategy
 
 Agents are Python modules that export a compiled `graph` variable:
+
 ```python
 # graphs/weather_agent.py
 workflow = StateGraph(WeatherState)
@@ -110,8 +122,9 @@ graph = workflow.compile()  # Must export as 'graph'
 **Lifespan Management**: The app uses `@asynccontextmanager` to properly initialize/cleanup LangGraph components during FastAPI startup/shutdown.
 
 **Health Checks**: Comprehensive health endpoint tests connectivity to:
+
 - SQLAlchemy database engine
-- LangGraph checkpointer 
+- LangGraph checkpointer
 - LangGraph store
 
 ### Authentication Flow
@@ -125,7 +138,7 @@ graph = workflow.compile()  # Must export as 'graph'
 ## Key Dependencies
 
 - **langgraph**: Core graph execution framework
-- **langgraph-checkpoint-postgres**: Official PostgreSQL state persistence  
+- **langgraph-checkpoint-postgres**: Official PostgreSQL state persistence
 - **langgraph-sdk**: Authentication and SDK components
 - **psycopg[binary]**: Required by LangGraph packages (not asyncpg)
 - **FastAPI + uvicorn**: HTTP API layer
@@ -136,10 +149,12 @@ graph = workflow.compile()  # Must export as 'graph'
 The server uses environment-based authentication switching with proper LangGraph SDK integration:
 
 **Authentication Types:**
+
 - `AUTH_TYPE=noop` - No authentication (allow all requests, useful for development)
 - `AUTH_TYPE=custom` - Custom authentication (integrate with your auth service)
 
 **Configuration:**
+
 ```bash
 # Set in .env file
 AUTH_TYPE=noop  # or "custom"
@@ -147,8 +162,9 @@ AUTH_TYPE=noop  # or "custom"
 
 **Custom Authentication:**
 To implement custom auth, modify the `@auth.authenticate` and `@auth.on` decorated functions in `auth.py`:
+
 1. Update the custom `authenticate()` function to integrate with your auth service (Firebase, JWT, etc.)
-2. The `authorize()` function handles user-scoped access control automatically  
+2. The `authorize()` function handles user-scoped access control automatically
 3. Add any additional environment variables needed for your auth service
 
 **Middleware Integration:**

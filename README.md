@@ -1,4 +1,4 @@
-# Agent Protocol Server
+# Aegra (previously agent-protocol-server)
 
 > **Replace LangGraph Platform with your own backend – zero vendor lock-in, full control.**
 
@@ -28,8 +28,8 @@ Based on the [Agent Protocol specification](https://github.com/langchain-ai/agen
 
 ```bash
 # Clone and setup
-git clone https://github.com/ibbybuilds/agent-protocol-server.git
-cd agent-protocol-server
+git clone https://github.com/ibbybuilds/aegra.git
+cd aegra
 uv install
 
 source .venv/bin/activate (for mac/linux)
@@ -67,7 +67,7 @@ Client → FastAPI → LangGraph SDK → PostgreSQL
 ## 📁 Project Structure
 
 ```
-agent-protocol-server/
+aegra/
 ├── langgraph.json              # Graph configuration
 ├── auth.py                     # Authentication setup
 ├── graphs/                     # Agent definitions
@@ -87,7 +87,7 @@ agent-protocol-server/
 
 ```bash
 # Database
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/agent_protocol_server
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/aegra
 
 # Authentication
 AUTH_TYPE=noop  # noop, custom

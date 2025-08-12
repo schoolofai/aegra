@@ -1,1 +1,1 @@
-# LangGraph Agent Protocol Server
+# Aegra - Agent Protocol Server

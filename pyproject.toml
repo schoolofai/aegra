@@ -1,7 +1,7 @@
 [project]
-name = "agent-protocol-server"
+name = "aegra"
 version = "0.1.0"
-description = "Agent Protocol Server"
+description = "Aegra - Open Source LangGraph Backend"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [[package]]
-name = "agent-protocol-server"
+name = "aegra"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [

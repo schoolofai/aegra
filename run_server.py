@@ -18,7 +18,7 @@ def setup_environment():
     """Set up environment variables for testing"""
     # Set database URL for development
     if not os.getenv("DATABASE_URL"):
-        os.environ["DATABASE_URL"] = "postgresql+asyncpg://user:password@localhost:5432/agent_protocol_server"
+        os.environ["DATABASE_URL"] = "postgresql+asyncpg://user:password@localhost:5432/aegra"
     
     # Set auth type (can be overridden)
     if not os.getenv("AUTH_TYPE"):
@@ -44,7 +44,7 @@ def configure_logging(level: str = "DEBUG"):
     # Ensure our package/module loggers are at least at the configured level
     logging.getLogger("agent_server").setLevel(log_level)
     logging.getLogger("src.agent_server").setLevel(log_level)
-    logging.getLogger("agent_protocol_server").setLevel(log_level)
+    logging.getLogger("aegra").setLevel(log_level)
     logging.getLogger("uvicorn.error").setLevel(log_level)
     logging.getLogger("uvicorn.access").setLevel(log_level)
 
@@ -54,7 +54,7 @@ def main():
     setup_environment()
     configure_logging(os.getenv("LOG_LEVEL", "INFO"))
 
-    print("🚀 Starting LangGraph Agent Server...")
+    print("🚀 Starting Aegra...")
     print("📍 Server will be available at: http://localhost:8000")
     print("📊 API docs will be available at: http://localhost:8000/docs")
     print("🧪 Test with: python test_sdk_integration.py")

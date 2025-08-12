@@ -1,4 +1,4 @@
-"""FastAPI application for LangGraph Agent Protocol Server"""
+"""FastAPI application for Aegra (Agent Protocol Server)"""
 import asyncio
 import os
 from contextlib import asynccontextmanager
@@ -56,8 +56,8 @@ async def lifespan(app: FastAPI):
 
 # Create FastAPI application
 app = FastAPI(
-    title="LangGraph Agent Protocol Server",
-    description="Production-ready Agent Protocol server built on LangGraph",
+    title="Aegra",
+    description="Aegra: Production-ready Agent Protocol server built on LangGraph",
     version="0.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
@@ -119,7 +119,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 async def root():
     """Root endpoint"""
     return {
-        "message": "LangGraph Agent Protocol Server",
+        "message": "Aegra",
         "version": "0.1.0",
         "status": "running"
     }
