@@ -34,7 +34,7 @@ Replace LangGraph Platform with your own infrastructure. Built with FastAPI + Po
 - **🏠 Self-Hosted**: Run on your infrastructure, your rules
 - **🔄 Drop-in Replacement**: Use existing LangGraph Client SDK without changes
 - **🛡️ Production Ready**: PostgreSQL persistence, streaming, authentication
-- **📊 Zero Vendor Lock-in**: MIT license, open source, full control
+- **📊 Zero Vendor Lock-in**: Apache 2.0 license, open source, full control
 - **🚀 Fast Setup**: 5-minute deployment with Docker
 - **🔌 Agent Protocol Compliant**: Standards-based implementation
 

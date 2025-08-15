@@ -9,34 +9,38 @@ Aegra is an open source LangGraph Platform alternative, and we welcome all contr
 ### Development Setup
 
 1. **Fork and Clone**
+
    ```bash
    git clone https://github.com/YOUR_USERNAME/aegra.git
    cd aegra
    ```
 
 2. **Environment Setup**
+
    ```bash
    # Install dependencies
    uv install
-   
+
    # Activate virtual environment
    source .venv/bin/activate  # Mac/Linux
    # OR .venv/Scripts/activate  # Windows
-   
+
    # Copy environment file
    cp .env.example .env
    ```
 
 3. **Database Setup**
+
    ```bash
    # Start PostgreSQL
    docker-compose up -d postgres
-   
+
    # Run migrations
    alembic upgrade head
    ```
 
 4. **Run Tests**
+
    ```bash
    pytest
    ```
@@ -90,6 +94,7 @@ We especially welcome contributions in:
 #### Pull Request Process
 
 1. **Create a Branch**
+
    ```bash
    git checkout -b feature/your-feature-name
    # OR
@@ -97,29 +102,32 @@ We especially welcome contributions in:
    ```
 
 2. **Make Changes**
+
    - Write clean, documented code
    - Follow existing code style
    - Add tests for new functionality
    - Update documentation if needed
 
 3. **Test Locally**
+
    ```bash
    # Run tests
    pytest
-   
+
    # Run linting (if configured)
    # black . && isort . && flake8
-   
+
    # Test the server manually
    python run_server.py
    curl http://localhost:8000/health
    ```
 
 4. **Commit Changes**
+
    ```bash
    git add .
    git commit -m "feat: add awesome new feature"
-   
+
    # Use conventional commits format:
    # feat: new feature
    # fix: bug fix
@@ -130,11 +138,13 @@ We especially welcome contributions in:
    ```
 
 5. **Push and Create PR**
+
    ```bash
    git push origin your-branch-name
    ```
-   
+
    Then create a pull request on GitHub with:
+
    - Clear title and description
    - Reference any related issues
    - Explain what changed and why
@@ -200,10 +210,10 @@ Contributors will be:
 
 ## 📄 License
 
-By contributing to Aegra, you agree that your contributions will be licensed under the MIT License.
+By contributing to Aegra, you agree that your contributions will be licensed under the Apache 2.0 License.
 
 ---
 
 **Thank you for helping make Aegra the best open source LangGraph Platform alternative!** 🚀
 
-*Questions? Feel free to ask in issues or discussions. We're here to help!*
+_Questions? Feel free to ask in issues or discussions. We're here to help!_
