@@ -283,8 +283,9 @@ We welcome contributions! Here's how you can help:
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file for details.
+Apache 2.0 License - see [LICENSE](LICENSE) file for details.
 
+**TL;DR**: Use it, modify it, distribute it, sell it. We only ask that you keep the license notice.
 
 ---
 
