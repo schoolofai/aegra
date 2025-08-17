@@ -40,80 +40,12 @@ class DatabaseManager:
         self.store = None
         # Note: LangGraph components will be created as context managers when needed
         
-        # Create our minimal metadata tables
-        await self._create_metadata_tables()
+        # Note: Database schema is now managed by Alembic migrations
+        # Run 'alembic upgrade head' to apply migrations
         
         print("✅ Database and LangGraph components initialized")
     
-    async def _create_metadata_tables(self):
-        """Create Agent Protocol metadata tables"""
-        async with self.engine.begin() as conn:
-            # Ensure required extension for UUID generation-as-text BEFORE using uuid_generate_v4()
-            await conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp";'))
 
-            # Create tables one by one (asyncpg doesn't support multiple statements)
-            await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS assistant (
-                    assistant_id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
-                    name TEXT NOT NULL,
-                    description TEXT,
-                    graph_id TEXT NOT NULL,
-                    config JSONB DEFAULT '{}',
-                    user_id TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-            """))
-            
-            await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS runs (
-                    run_id TEXT PRIMARY KEY DEFAULT uuid_generate_v4()::text,
-                    thread_id TEXT NOT NULL,
-                    assistant_id TEXT REFERENCES assistant(assistant_id),
-                    status TEXT DEFAULT 'pending',
-                    input JSONB,
-                    config JSONB,
-                    output JSONB,
-                    error_message TEXT,
-                    user_id TEXT NOT NULL,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                )
-            """))
-            
-            await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS thread (
-                    thread_id TEXT PRIMARY KEY,
-                    status TEXT DEFAULT 'idle',
-                    metadata_json JSONB DEFAULT '{}',
-                    user_id TEXT NOT NULL,
-                    created_at TIMESTAMP DEFAULT NOW(),
-                    updated_at TIMESTAMP DEFAULT NOW()
-                )
-            """))
-
-            # Events table for SSE replay persistence
-            await conn.execute(text("""
-                CREATE TABLE IF NOT EXISTS run_events (
-                    id TEXT PRIMARY KEY,
-                    run_id TEXT NOT NULL,
-                    seq INTEGER NOT NULL,
-                    event TEXT NOT NULL,
-                    data JSONB,
-                    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-                )
-            """))
-
-            # Create indexes
-            await conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS idx_assistant_user_graph ON assistant(user_id, graph_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_assistant_user ON assistant(user_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_thread_id ON runs(thread_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_user ON runs(user_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_assistant_id ON runs(assistant_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_runs_created_at ON runs(created_at)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_thread_user ON thread(user_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_run_events_run_seq ON run_events(run_id, seq)"))
     
     async def close(self):
         """Close database connections"""

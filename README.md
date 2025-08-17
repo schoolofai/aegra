@@ -60,11 +60,8 @@ uv install
 source .venv/bin/activate  # Mac/Linux
 # OR .venv/Scripts/activate  # Windows
 
-# Start database
-docker-compose up -d postgres
-
-# Launch server
-python run_server.py
+# Start everything (database + migrations + server)
+docker compose up aegra
 ```
 
 ### Verify It Works
@@ -78,6 +75,28 @@ open http://localhost:8000/docs
 ```
 
 **🎉 You now have a self-hosted LangGraph Platform alternative running locally!**
+
+## 👨‍💻 For Developers
+
+**New to database migrations?** Check out our guides:
+
+- **📚 [Developer Guide](docs/developer-guide.md)** - Complete setup, migrations, and development workflow
+- **⚡ [Migration Cheatsheet](docs/migration-cheatsheet.md)** - Quick reference for common commands
+
+**Quick Development Commands:**
+
+```bash
+# Docker development (recommended)
+docker-compose up aegra
+
+# Local development
+docker-compose up postgres -d
+python3 scripts/migrate.py upgrade
+python3 run_server.py
+
+# Create new migration
+python3 scripts/migrate.py revision --autogenerate -m "Add new feature"
+```
 
 ## 🧪 Try the Example Agent
 
@@ -219,6 +238,8 @@ OPENAI_API_KEY=sk-...
 - Hot reload in development
 - Clear error messages and logging
 - Extensible architecture
+- **📚 [Developer Guide](docs/developer-guide.md)** - Complete setup, migrations, and development workflow
+- **⚡ [Migration Cheatsheet](docs/migration-cheatsheet.md)** - Quick reference for common commands
 
 ## 📊 Development Status
 
@@ -282,7 +303,7 @@ We welcome contributions! Here's how you can help:
 - Integration examples
 - Best practices
 
-**Get Started**: Check out [CONTRIBUTING.md](CONTRIBUTING.md) and our [good first issues](https://github.com/ibbybuilds/aegra/labels/good%20first%20issue).
+**Get Started**: Check out [CONTRIBUTING.md](CONTRIBUTING.md), our [Developer Guide](docs/developer-guide.md), and our [good first issues](https://github.com/ibbybuilds/aegra/labels/good%20first%20issue).
 
 ## 📄 License
 
