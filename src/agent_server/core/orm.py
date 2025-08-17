@@ -25,12 +25,12 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     text,
+    Index,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 
-from .database import db_manager
 
 Base = declarative_base()
 
@@ -55,6 +55,13 @@ class Assistant(Base):
     )
 
 
+    # Indexes for performance
+    __table_args__ = (
+        Index('idx_assistant_user', 'user_id'),
+        Index('idx_assistant_user_graph', 'user_id', 'graph_id', unique=True),
+    )
+
+
 class Thread(Base):
     __tablename__ = "thread"
 
@@ -68,6 +75,11 @@ class Thread(Base):
     )
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=text("now()")
+    )
+
+    # Indexes for performance
+    __table_args__ = (
+        Index('idx_thread_user', 'user_id'),
     )
 
 
@@ -93,6 +105,15 @@ class Run(Base):
         TIMESTAMP(timezone=True), server_default=text("now()")
     )
 
+    # Indexes for performance
+    __table_args__ = (
+        Index('idx_runs_thread_id', 'thread_id'),
+        Index('idx_runs_user', 'user_id'),
+        Index('idx_runs_status', 'status'),
+        Index('idx_runs_assistant_id', 'assistant_id'),
+        Index('idx_runs_created_at', 'created_at'),
+    )
+
 
 # ---------------------------------------------------------------------------
 # Session factory
@@ -105,6 +126,7 @@ def _get_session_maker() -> async_sessionmaker[AsyncSession]:
     """Return a cached async_sessionmaker bound to db_manager.engine."""
     global async_session_maker
     if async_session_maker is None:
+        from .database import db_manager
         engine = db_manager.get_engine()
         async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
     return async_session_maker
