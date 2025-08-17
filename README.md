@@ -39,6 +39,7 @@ Replace LangGraph Platform with your own infrastructure. Built with FastAPI + Po
 - **📊 Zero Vendor Lock-in**: Apache 2.0 license, open source, full control
 - **🚀 Fast Setup**: 5-minute deployment with Docker
 - **🔌 Agent Protocol Compliant**: Implements the open-source [Agent Protocol](https://github.com/langchain-ai/agent-protocol) specification
+- **💬 Agent Chat UI Compatible**: Works seamlessly with [LangChain's Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui)
 
 ## 🚀 Quick Start (5 minutes)
 
@@ -75,6 +76,10 @@ open http://localhost:8000/docs
 ```
 
 **🎉 You now have a self-hosted LangGraph Platform alternative running locally!**
+
+## 💬 Agent Chat UI Compatible
+
+Aegra works seamlessly with [LangChain's Agent Chat UI](https://github.com/langchain-ai/agent-chat-ui). Simply set `NEXT_PUBLIC_API_URL=http://localhost:8000` and `NEXT_PUBLIC_ASSISTANT_ID=agent` in your Agent Chat UI environment to connect to your Aegra backend.
 
 ## 👨‍💻 For Developers
 
@@ -266,19 +271,26 @@ OPENAI_API_KEY=sk-...
 
 ## 🛣️ Roadmap
 
+**✅ Completed**
+
+- Agent Chat UI compatibility
+- Agent Protocol API implementation
+- PostgreSQL persistence and streaming
+- Authentication framework
+
 **🎯 Next**
 
-- Client example in Next.js
 - Human-in-the-loop interrupts
 - Redis-backed streaming buffers
 - Langfuse integration
+- Advanced deployment recipes
 
 **🚀 Future**
 
 - Multi-tenant architecture
-- Advanced deployment recipes
 - Performance optimizations
 - Additional LLM provider integrations
+- Custom UI themes and branding
 
 ## 🤝 Contributing
 
