@@ -12,6 +12,8 @@
 
 Replace LangGraph Platform with your own infrastructure. Built with FastAPI + PostgreSQL for developers who demand complete control over their agent orchestration.
 
+**🔌 Agent Protocol Compliant**: Aegra implements the [Agent Protocol](https://github.com/langchain-ai/agent-protocol) specification, an open-source standard for serving LLM agents in production.
+
 **🎯 Perfect for:** Teams escaping vendor lock-in • Data sovereignty requirements • Custom deployments • Cost optimization
 
 ---
@@ -36,7 +38,7 @@ Replace LangGraph Platform with your own infrastructure. Built with FastAPI + Po
 - **🛡️ Production Ready**: PostgreSQL persistence, streaming, authentication
 - **📊 Zero Vendor Lock-in**: Apache 2.0 license, open source, full control
 - **🚀 Fast Setup**: 5-minute deployment with Docker
-- **🔌 Agent Protocol Compliant**: Standards-based implementation
+- **🔌 Agent Protocol Compliant**: Implements the open-source [Agent Protocol](https://github.com/langchain-ai/agent-protocol) specification
 
 ## 🚀 Quick Start (5 minutes)
 
@@ -87,35 +89,35 @@ from langgraph_sdk import get_client
 
 async def main():
     # Connect to your self-hosted Aegra instance
-    client = get_client(url=\"http://localhost:8000\")
+    client = get_client(url="http://localhost:8000")
 
     # Create assistant (same API as LangGraph Platform)
     assistant = await client.assistants.create(
-        graph_id=\"agent\",
-        if_exists=\"do_nothing\",
+        graph_id="agent",
+        if_exists="do_nothing",
         config={},
     )
-    assistant_id = assistant[\"assistant_id\"]
+    assistant_id = assistant["assistant_id"]
 
     # Create thread
     thread = await client.threads.create()
-    thread_id = thread[\"thread_id\"]
+    thread_id = thread["thread_id"]
 
     # Stream responses (identical to LangGraph Platform)
     stream = client.runs.stream(
         thread_id=thread_id,
         assistant_id=assistant_id,
         input={
-            \"messages\": [
-                {\"type\": \"human\", \"content\": [{\"type\": \"text\", \"text\": \"hello\"}]}
+            "messages": [
+                {"type": "human", "content": [{"type": "text", "text": "hello"}]}
             ]
         },
-        stream_mode=[\"values\", \"messages-tuple\", \"custom\"],
-        on_disconnect=\"cancel\",
+        stream_mode=["values", "messages-tuple", "custom"],
+        on_disconnect="cancel",
     )
 
     async for chunk in stream:
-        print(f\"event: {getattr(chunk, 'event', None)}, data: {getattr(chunk, 'data', None)}\")
+        print(f"event: {getattr(chunk, 'event', None)}, data: {getattr(chunk, 'data', None)}")
 
 asyncio.run(main())
 ```
@@ -136,6 +138,7 @@ SDK      API    Management      Storage
 - **FastAPI**: Agent Protocol-compliant HTTP layer
 - **LangGraph**: State management and graph execution
 - **PostgreSQL**: Durable checkpoints and metadata
+- **Agent Protocol**: Open-source specification for LLM agent APIs
 - **Config-driven**: `aegra.json` for graph definitions
 
 ## 📁 Project Structure
@@ -196,7 +199,7 @@ OPENAI_API_KEY=sk-...
 
 ### ✅ **Core Features**
 
-- Agent Protocol-compliant REST endpoints
+- [Agent Protocol](https://github.com/langchain-ai/agent-protocol)-compliant REST endpoints
 - Persistent conversations with PostgreSQL checkpoints
 - Streaming responses with network resilience
 - Config-driven agent graph management
