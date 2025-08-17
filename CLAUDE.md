@@ -12,11 +12,26 @@ Project: Aegra — Open Source LangGraph Backend (Agent Protocol Server)
 # Install dependencies
 uv install
 
-# Activate virtual environment (if needed)
+# Activate virtual environment (IMPORTANT for migrations)
 source .venv/bin/activate
+
+# Start database
+docker compose up postgres -d
+
+# Apply migrations
+python3 scripts/migrate.py upgrade
 ```
 
 ### Running the Application
+
+**Option 1: Docker (Recommended for beginners)**
+
+```bash
+# Start everything (database + migrations + server)
+docker compose up aegra
+```
+
+**Option 2: Local Development (Recommended for advanced users)**
 
 ```bash
 # Start development server with auto-reload
@@ -26,7 +41,7 @@ uv run uvicorn src.agent_server.main:app --reload
 uv run uvicorn src.agent_server.main:app --host 0.0.0.0 --port 8000 --reload
 
 # Start development database
-docker-compose up -d postgres
+docker compose up postgres -d
 ```
 
 ### Testing
@@ -51,13 +66,20 @@ curl http://localhost:8000/health
 ### Database Management
 
 ```bash
-# Database migrations (when implemented)
-alembic upgrade head
-alembic revision --autogenerate -m "description"
+# Database migrations (using our custom script)
+python3 scripts/migrate.py upgrade
+python3 scripts/migrate.py revision -m "description"
+python3 scripts/migrate.py revision --autogenerate -m "description"
+
+# Check migration status
+python3 scripts/migrate.py current
+python3 scripts/migrate.py history
 
 # Reset database (development)
-docker-compose down postgres
-docker-compose up -d postgres
+python3 scripts/migrate.py reset
+
+# Start database
+docker compose up postgres -d
 ```
 
 ### Code Quality (Optional - not currently configured)
@@ -105,6 +127,7 @@ Aegra is an **Agent Protocol server** that acts as an HTTP wrapper around **offi
 - Handles URL conversion between asyncpg and psycopg formats
 - Provides singleton access to checkpointer and store instances
 - Auto-creates LangGraph tables via `.setup()` calls
+- **Note**: Database schema is now managed by Alembic migrations (see `alembic/versions/`)
 
 ### Graph Loading Strategy
 
@@ -143,6 +166,9 @@ graph = workflow.compile()  # Must export as 'graph'
 - **psycopg[binary]**: Required by LangGraph packages (not asyncpg)
 - **FastAPI + uvicorn**: HTTP API layer
 - **SQLAlchemy**: For Agent Protocol metadata tables only
+- **alembic**: Database migration management
+- **asyncpg**: Async PostgreSQL driver for SQLAlchemy
+- **greenlet**: Required for async SQLAlchemy operations
 
 ## Authentication System
 
@@ -183,3 +209,37 @@ Authentication runs as middleware on every request. LangGraph operations automat
 **Testing**: Tests should be async-aware and use pytest-asyncio for proper async test support.
 
 Always run test commands (`uv run pytest`) before completing tasks. Linting and type checking tools are not currently configured for this project.
+
+## Migration System
+
+The project now uses Alembic for database schema management:
+
+**Key Files:**
+
+- `alembic.ini`: Alembic configuration
+- `alembic/env.py`: Environment setup with async support
+- `alembic/versions/`: Migration files
+- `scripts/migrate.py`: Custom migration management script
+
+**Migration Commands:**
+
+```bash
+# Apply migrations
+python3 scripts/migrate.py upgrade
+
+# Create new migration
+python3 scripts/migrate.py revision -m "description"
+
+# Check status
+python3 scripts/migrate.py current
+python3 scripts/migrate.py history
+
+# Reset (destructive)
+python3 scripts/migrate.py reset
+```
+
+**Important Notes:**
+
+- Always activate virtual environment before running migrations
+- Docker automatically runs migrations on startup
+- Migration files are version-controlled and should be committed with code changes

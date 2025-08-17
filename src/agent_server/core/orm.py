@@ -26,6 +26,7 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
     Index,
+    Integer,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -112,6 +113,25 @@ class Run(Base):
         Index('idx_runs_status', 'status'),
         Index('idx_runs_assistant_id', 'assistant_id'),
         Index('idx_runs_created_at', 'created_at'),
+    )
+
+
+class RunEvent(Base):
+    __tablename__ = "run_events"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    run_id: Mapped[str] = mapped_column(Text, nullable=False)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    event: Mapped[str] = mapped_column(Text, nullable=False)
+    data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), server_default=text("now()")
+    )
+
+    # Indexes for performance
+    __table_args__ = (
+        Index('idx_run_events_run_id', 'run_id'),
+        Index('idx_run_events_seq', 'run_id', 'seq'),
     )
 
 

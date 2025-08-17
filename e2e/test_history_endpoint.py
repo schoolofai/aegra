@@ -25,7 +25,7 @@ async def test_history_endpoint_e2e():
     This verifies assistant creation, run execution, join endpoint, and history retrieval.
     Requires the server to be running and accessible.
     """
-    server_url = os.getenv("SERVER_URL", "http://localhost:8000/v1")
+    server_url = os.getenv("SERVER_URL", "http://localhost:8000")
     api_key = os.getenv("API_KEY", "test-key")
     print(f"Using SERVER_URL={server_url}")
 
