@@ -1,20 +1,5 @@
-import os
-import json
 import pytest
-
-try:
-    from langgraph_sdk import get_client
-except Exception as e:
-    raise RuntimeError("langgraph-sdk is required for E2E tests. Install via extras 'e2e' or add to your environment.") from e
-
-
-def _log(title: str, payload):
-    # Compact JSON logging for easier CI/debugging; fall back to str if non-serializable
-    try:
-        formatted = json.dumps(payload, ensure_ascii=False, indent=2, default=str)
-    except Exception:
-        formatted = str(payload)
-    print(f"\n=== {title} ===\n{formatted}\n")
+from e2e._utils import get_e2e_client, elog
 
 
 @pytest.mark.e2e
@@ -25,11 +10,7 @@ async def test_history_endpoint_e2e():
     This verifies assistant creation, run execution, join endpoint, and history retrieval.
     Requires the server to be running and accessible.
     """
-    server_url = os.getenv("SERVER_URL", "http://localhost:8000")
-    api_key = os.getenv("API_KEY", "test-key")
-    print(f"Using SERVER_URL={server_url}")
-
-    client = get_client(url=server_url, api_key=api_key)
+    client = get_e2e_client()
 
     # Create an assistant (idempotent if server supports if_exists/do_nothing)
     assistant = await client.assistants.create(
@@ -37,18 +18,18 @@ async def test_history_endpoint_e2e():
         config={"tags": ["chat", "llm"]},
         if_exists="do_nothing",
     )
-    _log("Assistant.create response", assistant)
+    elog("Assistant.create response", assistant)
     assert "assistant_id" in assistant, f"Invalid assistant response: {assistant}"
 
     # Create a thread
     thread = await client.threads.create()
-    _log("Threads.create response", thread)
+    elog("Threads.create response", thread)
     assert "thread_id" in thread, f"Invalid thread response: {thread}"
     thread_id = thread["thread_id"]
 
     # Initial history (likely empty)
     initial_history = await client.threads.get_history(thread_id)
-    _log("Threads.get_history initial", initial_history)
+    elog("Threads.get_history initial", initial_history)
     assert isinstance(initial_history, list)
 
     # Create a run and wait for completion using join (also validates join endpoint behavior)
@@ -57,21 +38,21 @@ async def test_history_endpoint_e2e():
         assistant_id=assistant["assistant_id"],
         input={"messages": [{"role": "human", "content": "Hello! Tell me a short joke."}]},
     )
-    _log("Runs.create response", run)
+    elog("Runs.create response", run)
     assert "run_id" in run
 
     final_state = await client.runs.join(thread_id, run["run_id"])
-    _log("Runs.join final_state", final_state)
+    elog("Runs.join final_state", final_state)
     assert isinstance(final_state, dict)
 
     # Verify history has at least one snapshot after completing the run
     history_after = await client.threads.get_history(thread_id)
-    _log("Threads.get_history after run", history_after)
+    elog("Threads.get_history after run", history_after)
     assert isinstance(history_after, list)
     assert len(history_after) >= 1, f"Expected at least one checkpoint after run; got {len(history_after)}"
 
     # Validate pagination with limit
     limited = await client.threads.get_history(thread_id, limit=1)
-    _log("Threads.get_history limit=1", limited)
+    elog("Threads.get_history limit=1", limited)
     assert isinstance(limited, list)
     assert len(limited) == 1
