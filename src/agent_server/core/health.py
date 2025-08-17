@@ -1,5 +1,6 @@
 """Health check endpoints"""
 import asyncio
+import os
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import text
@@ -15,6 +16,25 @@ class HealthResponse(BaseModel):
     database: str
     langgraph_checkpointer: str
     langgraph_store: str
+
+
+class InfoResponse(BaseModel):
+    """Info endpoint response model"""
+    name: str
+    version: str
+    description: str
+    status: str
+
+
+@router.get("/info", response_model=InfoResponse)
+async def info():
+    """Simple service information endpoint"""
+    return InfoResponse(
+        name="Aegra",
+        version="0.1.0",
+        description="Production-ready Agent Protocol server built on LangGraph",
+        status="running"
+    )
 
 
 @router.get("/health", response_model=HealthResponse)
