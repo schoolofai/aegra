@@ -34,6 +34,8 @@ services:
         condition: service_healthy
     volumes:
       - ./graphs:/app/graphs:ro
+      - ./src:/app/src:ro # for hot reload support of server
+      - ./auth.py:/app/auth.py:ro
       - ./.env:/app/.env:ro
     command: >
       sh -c "
