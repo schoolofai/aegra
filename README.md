@@ -55,11 +55,18 @@ Replace LangGraph Platform with your own infrastructure. Built with FastAPI + Po
 # Clone and setup
 git clone https://github.com/ibbybuilds/aegra.git
 cd aegra
-uv install
+# Install uv if missing
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Sync env and dependencies
+uv sync
 
 # Activate environment
 source .venv/bin/activate  # Mac/Linux
 # OR .venv/Scripts/activate  # Windows
+
+# Environment
+cp .env.example .env
 
 # Start everything (database + migrations + server)
 docker compose up aegra
@@ -75,7 +82,7 @@ curl http://localhost:8000/health
 open http://localhost:8000/docs
 ```
 
-**🎉 You now have a self-hosted LangGraph Platform alternative running locally!**
+You now have a self-hosted LangGraph Platform alternative running locally.
 
 ## 💬 Agent Chat UI Compatible
 
@@ -92,10 +99,10 @@ Aegra works seamlessly with [LangChain's Agent Chat UI](https://github.com/langc
 
 ```bash
 # Docker development (recommended)
-docker-compose up aegra
+docker compose up aegra
 
 # Local development
-docker-compose up postgres -d
+docker compose up postgres -d
 python3 scripts/migrate.py upgrade
 python3 run_server.py
 
@@ -150,7 +157,7 @@ asyncio.run(main())
 
 ## 🏗️ Architecture
 
-```
+```text
 Client → FastAPI → LangGraph SDK → PostgreSQL
  ↓         ↓           ↓             ↓
 Agent    HTTP     State        Persistent
@@ -167,7 +174,7 @@ SDK      API    Management      Storage
 
 ## 📁 Project Structure
 
-```
+```text
 aegra/
 ├── aegra.json           # Graph configuration
 ├── auth.py              # Authentication setup
@@ -187,7 +194,11 @@ aegra/
 
 ### Environment Variables
 
-Create `.env` file:
+Copy `.env.example` to `.env` and configure values:
+
+```bash
+cp .env.example .env
+```
 
 ```bash
 # Database
@@ -245,29 +256,6 @@ OPENAI_API_KEY=sk-...
 - Extensible architecture
 - **📚 [Developer Guide](docs/developer-guide.md)** - Complete setup, migrations, and development workflow
 - **⚡ [Migration Cheatsheet](docs/migration-cheatsheet.md)** - Quick reference for common commands
-
-## 📊 Development Status
-
-### ✅ **Phase 1: Foundation (Complete)**
-
-- FastAPI application with LangGraph integration
-- PostgreSQL database and migrations
-- Basic authentication framework
-- Health checks and API documentation
-
-### 🔄 **Phase 2: Agent Protocol API (In Progress)**
-
-- Assistant management endpoints
-- Thread creation and persistence
-- Run execution with streaming
-- Store operations (key-value + vector search)
-
-### 📋 **Phase 3: Production Features (Planned)**
-
-- Advanced authentication backends
-- Multi-tenant isolation
-- Monitoring and metrics integration
-- Deployment automation
 
 ## 🛣️ Roadmap
 
