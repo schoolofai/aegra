@@ -69,6 +69,9 @@ def create_chat_graph():
 # Create the graph instance
 chat_graph = create_chat_graph()
 
+# Export as 'graph' for Aegra configuration
+graph = chat_graph
+
 
 if __name__ == "__main__":
     # Test the graph locally
