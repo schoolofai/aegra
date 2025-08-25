@@ -11,3 +11,8 @@ wheels/
 
 # env files
 .env
+
+# Local log files
+aegra-backend.log
+aegra-frontend.log
+aegra-frontend-install.log
