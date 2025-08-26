@@ -123,11 +123,11 @@ for i in {1..30}; do
     sleep 1
 done
 
-# Check if frontend directory exists
-FRONTEND_DIR="../assistant-ui-frontend-aegra"
+# Check if shared frontend directory exists
+FRONTEND_DIR="../langgraph-agent/assistant-ui-frontend"
 if [ ! -d "$FRONTEND_DIR" ]; then
-    echo -e "${RED}❌ Frontend directory not found: $FRONTEND_DIR${NC}"
-    echo -e "${YELLOW}Please make sure the Aegra frontend is set up${NC}"
+    echo -e "${RED}❌ Shared frontend directory not found: $FRONTEND_DIR${NC}"
+    echo -e "${YELLOW}Please make sure the LangGraph frontend is set up${NC}"
     exit 1
 fi
 
@@ -138,28 +138,19 @@ cd "$FRONTEND_DIR"
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
-    npm install --legacy-peer-deps &> ../aegra-agent/aegra-frontend-install.log
+    npm install --legacy-peer-deps &> ../../aegra-agent/aegra-frontend-install.log
     echo -e "${GREEN}✅ Frontend dependencies installed${NC}"
 fi
 
-# Check if .env.local exists with correct configuration
-if [ ! -f ".env.local" ] || ! grep -q "8000" .env.local; then
-    echo -e "${YELLOW}Creating Aegra frontend configuration...${NC}"
-    cat > .env.local << EOF
-# Aegra Backend Configuration
-NEXT_PUBLIC_LANGGRAPH_API_URL=http://localhost:8000
-NEXT_PUBLIC_LANGGRAPH_ASSISTANT_ID=agent
+# Configure frontend environment for Aegra
+echo -e "${YELLOW}Configuring frontend environment for Aegra...${NC}"
+cp .env.local.aegra .env.local
+echo -e "${GREEN}✅ Aegra frontend configuration applied${NC}"
 
-# Port configuration to avoid conflicts
-PORT=3001
-EOF
-    echo -e "${GREEN}✅ Frontend configuration created${NC}"
-fi
-
-# Start frontend server
+# Start frontend server with PORT environment variable
 echo -e "${GREEN}🚀 Starting Aegra frontend...${NC}"
-touch ../aegra-agent/aegra-frontend.log
-npm run dev &> ../aegra-agent/aegra-frontend.log &
+touch ../../aegra-agent/aegra-frontend.log
+PORT=3001 npm run dev &> ../../aegra-agent/aegra-frontend.log &
 FRONTEND_PID=$!
 
 # Wait for frontend to be ready
