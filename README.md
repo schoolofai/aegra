@@ -172,6 +172,7 @@ SDK      API    Management      Storage
 - **Agent Protocol**: Open-source specification for LLM agent APIs
 - **Config-driven**: `aegra.json` for graph definitions
 
+
 ## 📁 Project Structure
 
 ```text

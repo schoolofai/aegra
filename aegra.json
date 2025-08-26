@@ -1,5 +1,5 @@
 {
   "graphs": {
-    "agent": "./graphs/chat_agent.py:graph"
+    "agent": "./graphs/chat_agent_shared.py:graph"
   }
 }
