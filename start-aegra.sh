@@ -124,10 +124,10 @@ for i in {1..30}; do
 done
 
 # Check if shared frontend directory exists
-FRONTEND_DIR="../langgraph-agent/assistant-ui-frontend"
+FRONTEND_DIR="../assistant-ui-frontend"
 if [ ! -d "$FRONTEND_DIR" ]; then
     echo -e "${RED}❌ Shared frontend directory not found: $FRONTEND_DIR${NC}"
-    echo -e "${YELLOW}Please make sure the LangGraph frontend is set up${NC}"
+    echo -e "${YELLOW}Please make sure the shared frontend is set up${NC}"
     exit 1
 fi
 
@@ -138,7 +138,7 @@ cd "$FRONTEND_DIR"
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     echo -e "${YELLOW}Installing frontend dependencies...${NC}"
-    npm install --legacy-peer-deps &> ../../aegra-agent/aegra-frontend-install.log
+    npm install --legacy-peer-deps &> ../aegra-agent/aegra-frontend-install.log
     echo -e "${GREEN}✅ Frontend dependencies installed${NC}"
 fi
 
@@ -149,8 +149,8 @@ echo -e "${GREEN}✅ Aegra frontend configuration applied${NC}"
 
 # Start frontend server with PORT environment variable
 echo -e "${GREEN}🚀 Starting Aegra frontend...${NC}"
-touch ../../aegra-agent/aegra-frontend.log
-PORT=3001 npm run dev &> ../../aegra-agent/aegra-frontend.log &
+touch ../aegra-agent/aegra-frontend.log
+PORT=3001 npm run dev &> ../aegra-agent/aegra-frontend.log &
 FRONTEND_PID=$!
 
 # Wait for frontend to be ready
