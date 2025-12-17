@@ -243,3 +243,20 @@ python3 scripts/migrate.py reset
 - Always activate virtual environment before running migrations
 - Docker automatically runs migrations on startup
 - Migration files are version-controlled and should be committed with code changes
+
+## Deprecation Notices
+
+### infinite_practice_graph.py (V1) - DEPRECATED
+
+**DO NOT USE**: `langgraph-agent/src/agent/infinite_practice_graph.py` (V1) is deprecated and scheduled for removal.
+
+**Use instead**: `langgraph-agent/src/agent/infinite_practice_graph_v2.py` (V2)
+
+**Key differences**:
+- **V1**: Complex flow with full session state management in backend
+- **V2**: Stateless marking-only architecture - backend only marks responses and returns `mastery_delta`; frontend handles cumulative mastery tracking and block completion
+
+The V2 architecture provides:
+- Simpler backend logic (flat graph, no subgraphs)
+- Frontend-driven state management for better responsiveness
+- Cleaner separation of concerns between marking and progress tracking
