@@ -4,6 +4,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Project: Aegra — Open Source LangGraph Backend (Agent Protocol Server)
 
+See root `CLAUDE.md` for cross-cutting patterns (database architecture, Appwrite rules, structured output filtering, AIMessage patterns).
+
 ## Development Commands
 
 ### Environment Setup
@@ -246,17 +248,14 @@ python3 scripts/migrate.py reset
 
 ## Deprecation Notices
 
-### infinite_practice_graph.py (V1) - DEPRECATED
+See `langgraph-agent/CLAUDE.md` for graph deprecation notices (infinite_practice_graph V1 -> V2).
 
-**DO NOT USE**: `langgraph-agent/src/agent/infinite_practice_graph.py` (V1) is deprecated and scheduled for removal.
+## Lessons Learned
 
-**Use instead**: `langgraph-agent/src/agent/infinite_practice_graph_v2.py` (V2)
+Record bugs, gotchas, and hard-won insights discovered while working in this
+module. Add entries with a date and brief description when you encounter a
+non-obvious issue or fix a subtle bug. This helps avoid repeating mistakes.
 
-**Key differences**:
-- **V1**: Complex flow with full session state management in backend
-- **V2**: Stateless marking-only architecture - backend only marks responses and returns `mastery_delta`; frontend handles cumulative mastery tracking and block completion
+Format: `- [YYYY-MM] Brief description of the issue and resolution`
 
-The V2 architecture provides:
-- Simpler backend logic (flat graph, no subgraphs)
-- Frontend-driven state management for better responsiveness
-- Cleaner separation of concerns between marking and progress tracking
+<!-- Add new entries below -->
